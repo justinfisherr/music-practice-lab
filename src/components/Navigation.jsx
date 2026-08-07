@@ -1,20 +1,17 @@
-const TABS = [
-  { id: 'practice', label: 'PRACTICE TRACKER' },
-  { id: 'trainer', label: 'CHORD TRAINER' },
-]
-
-export default function Navigation({ view, onChange }) {
+// Data-driven primary nav. Renders one tab per route; scrolls horizontally on
+// narrow screens so it keeps working as more features are added.
+export default function Navigation({ routes, view, onChange }) {
   return (
     <nav className="nav" aria-label="Primary">
-      {TABS.map((tab) => (
+      {routes.map((route) => (
         <button
-          key={tab.id}
+          key={route.id}
           type="button"
-          className={`nav__tab${view === tab.id ? ' is-active' : ''}`}
-          aria-pressed={view === tab.id}
-          onClick={() => onChange(tab.id)}
+          className={`nav__tab${view === route.id ? ' is-active' : ''}`}
+          aria-pressed={view === route.id}
+          onClick={() => onChange(route.id)}
         >
-          {tab.label}
+          {route.label}
         </button>
       ))}
     </nav>

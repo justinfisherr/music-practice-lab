@@ -65,13 +65,17 @@ select {
   display: flex;
   gap: 0;
   margin: 18px 0;
+  overflow-x: auto; /* scroll instead of squish as features grow */
+  scrollbar-width: thin;
 }
 .nav__tab {
-  flex: 1;
+  flex: 1 0 auto;
+  min-width: 118px;
   padding: 16px 12px;
   font-size: clamp(13px, 3vw, 16px);
   font-weight: 700;
   letter-spacing: 1.5px;
+  white-space: nowrap;
   background: var(--panel);
   color: var(--ink);
   border: 3px solid var(--line);
@@ -499,6 +503,43 @@ select {
   background: var(--bg);
   padding: 6px 12px;
   min-width: 44px;
+}
+
+/* ---- Free play readout ---- */
+.readout {
+  text-align: center;
+  width: 100%;
+}
+.readout--held {
+  opacity: 0.55;
+}
+.readout__kind {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--muted);
+}
+.readout__name {
+  display: block;
+  font-size: clamp(44px, 15vw, 110px);
+  font-weight: 700;
+  line-height: 1.05;
+  margin: 8px 0;
+  word-break: break-word;
+}
+.readout__detail {
+  display: block;
+  margin-top: 6px;
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+.readout__chips {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 /* ---- Verdicts ---- */

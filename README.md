@@ -3,10 +3,16 @@
 A purpose-built, no-nonsense music practice machine. Two tools, one static app,
 zero backend. Everything persists in `localStorage` on your device.
 
-- **PRACTICE TRACKER** — spaced-repetition tracker for practice items. Open it,
-  see what needs practice, click a status, leave.
-- **CHORD TRAINER** — a MIDI-driven diminished-7th drill (with NORMAL, LIGHTNING,
-  and SURVIVAL modes) plus a non-MIDI QUIZ fallback.
+- **PRACTICE** — spaced-repetition tracker for practice items. Open it, see what
+  needs practice, click a status, leave.
+- **FREE PLAY** — play your MIDI keyboard and it names what you're holding: notes,
+  intervals, and chords (inversions and slash chords included).
+- **DIM7 DRILL** — a MIDI-driven diminished-7th drill with NORMAL, LIGHTNING, and
+  SURVIVAL modes.
+
+Sections are driven off a single route list in `src/App.jsx`, so adding a feature
+is a one-line change. A single MIDI connection is shared across every screen via
+React context — connect once, use it everywhere.
 
 Built with React + Vite. Plain CSS. No auth, no database, no cloud.
 
@@ -29,7 +35,7 @@ date. Statuses drive the spaced-repetition interval:
 Seeded exercises: ii–V–I, ii–V–i minor, Turnaround, Intervals,
 Up and down C ii–V–I, Diminished 7th chords.
 
-## Chord Trainer
+## Dim7 Drill
 
 ### The three diminished families
 
@@ -56,10 +62,16 @@ Modes:
 Tracked stats: score, current streak, best streak (persisted), accuracy, and
 correct/attempted.
 
-### QUIZ (no MIDI required)
+## Free Play
 
-Multiple-choice drills: chord name → notes, notes → chord name, and chord name →
-family, with an optional 5 / 10 / 15 second timer. Score and streak persist.
+Open **FREE PLAY**, connect your keyboard, and just play. The app reads the notes
+you're holding and names them in real time — a single note, a two-note interval,
+or a full chord. Recognition is bass-aware: inversions and slash chords (e.g.
+`C/E`) are labelled correctly, and symmetric chords list their enharmonic
+equivalents. The last thing you played stays on screen after you lift your hands.
+
+Add more recognizable chords by extending the template list in
+`src/data/chordDictionary.js` — the matcher is generic.
 
 ## MIDI setup
 
@@ -72,8 +84,8 @@ family, with an optional 5 / 10 / 15 second timer. Score and streak persist.
 ### Recommended browsers
 
 The Web MIDI API works in **Chrome** and **Edge** (desktop). Safari and Firefox
-do not support Web MIDI — the app detects this and points you to Quiz mode
-instead of crashing.
+do not support Web MIDI — the app detects this and shows a clear message instead
+of crashing.
 
 ## Run locally
 
