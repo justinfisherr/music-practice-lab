@@ -627,8 +627,90 @@ select {
   letter-spacing: 2px;
 }
 
+/* ---- Quiz manager ---- */
+.qm__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.qm__bulk {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.quizrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.quizrow__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.quizrow__name {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.quizrow__count {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+.quizrow__btns {
+  display: flex;
+  gap: 8px;
+}
+.qmitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.qmitem__idx {
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 22px;
+}
+.qmitem__sel {
+  min-width: 90px;
+}
+.qmitem__label {
+  flex: 1;
+  min-width: 160px;
+}
+.qmitem__chord {
+  font-weight: 700;
+  letter-spacing: 1px;
+  border: 3px solid var(--line);
+  background: var(--bg);
+  padding: 6px 10px;
+  min-width: 64px;
+  text-align: center;
+}
+.qm__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.qm__actions-right {
+  display: flex;
+  gap: 8px;
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 520px) {
+  .qmitem__label {
+    order: 5;
+    width: 100%;
+    flex-basis: 100%;
+  }
   .item__controls {
     flex-direction: column;
   }

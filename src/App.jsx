@@ -3,6 +3,7 @@ import Navigation from './components/Navigation.jsx'
 import PracticeTracker from './components/PracticeTracker.jsx'
 import MidiTrainer from './components/MidiTrainer.jsx'
 import FreePlay from './components/FreePlay.jsx'
+import QuizManager from './components/QuizManager.jsx'
 import { MidiProvider } from './hooks/MidiContext.jsx'
 
 // Single source of truth for the app's sections. Add a feature = add a row.
@@ -10,7 +11,8 @@ import { MidiProvider } from './hooks/MidiContext.jsx'
 const ROUTES = [
   { id: 'practice', label: 'PRACTICE', component: PracticeTracker },
   { id: 'freeplay', label: 'FREE PLAY', component: FreePlay },
-  { id: 'dim7', label: 'DIM7 DRILL', component: MidiTrainer },
+  { id: 'dim7', label: 'DRILLS', component: MidiTrainer },
+  { id: 'quizzes', label: 'QUIZZES', component: QuizManager },
 ]
 
 export default function App() {

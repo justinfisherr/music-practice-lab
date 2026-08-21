@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMidiContext } from '../hooks/MidiContext.jsx'
 import { useLocalStorage } from '../hooks/useLocalStorage.js'
-import { DRILLS, MODES, getDrill, LIGHTNING_SECONDS, SURVIVAL_LIVES } from '../drills/index.js'
+import { DRILLS, MODES, LIGHTNING_SECONDS, SURVIVAL_LIVES } from '../drills/index.js'
+import { QUIZZES_KEY, isPlayable, quizToDrill } from '../data/quizzes.js'
 import { pitchClassesEqual, noteName } from '../data/diminishedChords.js'
 import MidiConnection from './MidiConnection.jsx'
 import Stats from './Stats.jsx'
@@ -22,6 +23,13 @@ function freshSession(mode) {
 export default function MidiTrainer() {
   const midi = useMidiContext()
 
+  // Built-in drills (dim7) plus any playable custom quizzes from localStorage.
+  const [quizzes] = useLocalStorage(QUIZZES_KEY, [])
+  const drills = useMemo(
+    () => [...DRILLS, ...quizzes.filter(isPlayable).map(quizToDrill)],
+    [quizzes],
+  )
+
   const [drillId, setDrillId] = useState(DRILLS[0].id)
   const [mode, setMode] = useState('NORMAL')
   const [phase, setPhase] = useState('idle') // idle | running | done
@@ -30,8 +38,8 @@ export default function MidiTrainer() {
   const [feedback, setFeedback] = useState(null)
   const [timeLeft, setTimeLeft] = useState(LIGHTNING_SECONDS)
 
-  const drill = getDrill(drillId)
-  const [best, setBest] = useLocalStorage(`mpl.trainer.best.${drillId}`, 0)
+  const drill = drills.find((d) => d.id === drillId) ?? drills[0]
+  const [best, setBest] = useLocalStorage(`mpl.trainer.best.${drill.id}`, 0)
 
   // The live session snapshot for rendering; mutated through sessionRef.
   const [session, setSession] = useState(() => freshSession('NORMAL'))
@@ -152,7 +160,9 @@ export default function MidiTrainer() {
       const next = [...collectedRef.current, pc]
       collectedRef.current = next
       setCollected(next)
-      const target = drillRef.current.notesToCollect || 4
+      // Per-question count first (custom quizzes mix triads and 7ths), then the
+      // drill default.
+      const target = questionRef.current?.notesToCollect || drillRef.current.notesToCollect || 4
       if (next.length >= target) evaluate(next)
     })
     return unsubscribe
@@ -181,9 +191,16 @@ export default function MidiTrainer() {
 
   function chooseDrill(next) {
     setDrillId(next)
-    drillRef.current = getDrill(next)
+    drillRef.current = drills.find((d) => d.id === next) ?? drills[0]
     chooseMode(modeRef.current)
   }
+
+  // If the selected quiz was deleted or emptied elsewhere, fall back to the
+  // built-in drill so the picker and engine stay in sync.
+  useEffect(() => {
+    if (!drills.some((d) => d.id === drillId)) chooseDrill(drills[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drills, drillId])
 
   const accuracy = session.attempted > 0 ? Math.round((session.correct / session.attempted) * 100) : 0
   const extraStats = []
@@ -198,8 +215,8 @@ export default function MidiTrainer() {
         <>
           <Picker
             legend="DRILL"
-            options={DRILLS.map((d) => ({ id: d.id, label: d.label }))}
-            value={drillId}
+            options={drills.map((d) => ({ id: d.id, label: d.label }))}
+            value={drill.id}
             onChange={chooseDrill}
           />
           <Picker
