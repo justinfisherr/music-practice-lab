@@ -590,15 +590,19 @@ function HookStage({ session, recordAttempt, advanceStage, finish, onFinished, d
     setPhase('listening')
     setNotes([])
     setLit(-1)
-    playPhrase(stage.pcs, { gap: 0.5 })
-    stage.pcs.forEach((_, index) => {
-      timersRef.current.push(setTimeout(() => setLit(index), index * 500))
+    const performance = Array.from({ length: 8 }, (_, beat) => {
+      const index = stage.beats.indexOf(beat)
+      return index >= 0 ? stage.pcs[index] : null
     })
+    playPhrase(performance, { gap: 0.5 })
+    for (let beat = 0; beat < 8; beat++) {
+      timersRef.current.push(setTimeout(() => setLit(beat), beat * 500))
+    }
     timersRef.current.push(
       setTimeout(() => {
         setLit(-1)
         setPhase('your-turn')
-      }, stage.pcs.length * 500 + 350),
+      }, 8 * 500 + 350),
     )
   }
 
@@ -666,16 +670,15 @@ function HookStage({ session, recordAttempt, advanceStage, finish, onFinished, d
       <div className="hookgrid" aria-label="Two bar hook grid">
         {Array.from({ length: 8 }, (_, beat) => {
           const item = beatNotes.get(beat)
+          const state = lit === beat ? ' is-lit' : lit > beat ? ' is-past' : ''
           if (!item) {
             return (
-              <div className="hookcell is-rest" key={beat}>
+              <div className={`hookcell is-rest${state}`} key={beat}>
                 <span className="hookcell__beat">{beat + 1}</span>
                 <span className="hookcell__note">·</span>
               </div>
             )
           }
-          const state =
-            lit === item.index ? ' is-lit' : lit > item.index ? ' is-past' : ''
           return (
             <div className={`hookcell${state}`} key={beat}>
               <span className="hookcell__beat">{beat + 1}</span>

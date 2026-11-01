@@ -48,6 +48,7 @@ export async function playPhrase(pcs, { gap = 0.45 } = {}) {
     if (audio.state === 'suspended') await audio.resume()
     const t0 = audio.currentTime + 0.04
     pcs.forEach((pc, index) => {
+      if (pc == null) return
       const osc = audio.createOscillator()
       const gain = audio.createGain()
       const start = t0 + index * gap
