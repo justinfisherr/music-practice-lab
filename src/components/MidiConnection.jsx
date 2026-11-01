@@ -9,8 +9,8 @@ export default function MidiConnection({ midi }) {
       <div className="panel panel--warn">
         <p className="panel__title">NO WEB MIDI</p>
         <p className="panel__body">
-          Web MIDI is not supported in this browser. Use Chrome or Edge on desktop to connect a
-          keyboard.
+          Web MIDI is not supported in this browser. Graded stages need a desktop + MIDI keyboard;
+          use Chrome or Edge on desktop to connect one.
         </p>
       </div>
     )
@@ -41,6 +41,10 @@ export default function MidiConnection({ midi }) {
 
       {midi.status === 'denied' && (
         <p className="panel__body">Permission was refused. Reload the page and allow MIDI access.</p>
+      )}
+
+      {midi.status === 'ready' && midi.inputs.length === 0 && (
+        <p className="panel__body">No keyboard detected.</p>
       )}
 
       {midi.status === 'ready' && (
