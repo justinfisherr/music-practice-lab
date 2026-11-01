@@ -6,7 +6,7 @@
   --line: #111111;
   --focus: #e5342b;
   --ok: #14893b;
-  --due: #c9761a;
+  --due: #8a4a06;
   --shadow: 4px 4px 0 var(--ink);
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
 }
@@ -56,7 +56,7 @@ select {
 .masthead__sub {
   margin: 6px 0 0;
   font-size: 12px;
-  letter-spacing: 3px;
+  letter-spacing: 1.5px;
   color: #b9b6ac;
 }
 
@@ -127,6 +127,60 @@ select {
 }
 
 /* ---- Practice tracker ---- */
+.practice-log {
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 3px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.practice-log__bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.practice-log__label {
+  color: var(--muted);
+}
+.practice-log__status {
+  color: var(--focus);
+}
+.practice-log__status.is-done {
+  color: var(--ok);
+}
+.practice-log__title {
+  margin: 8px 0 4px;
+  font-size: clamp(20px, 5vw, 30px);
+  letter-spacing: 2px;
+  line-height: 1;
+}
+.practice-log__copy {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  line-height: 1.45;
+}
+.practice-log__btn {
+  background: var(--focus);
+  color: #fff;
+  border-color: var(--line);
+}
+.practice-log__btn.is-done {
+  background: var(--ok);
+}
+.practice-log__error {
+  margin: 12px 0 0;
+  color: var(--focus);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
 .tracker__bar {
   display: flex;
   justify-content: flex-end;
@@ -482,6 +536,13 @@ select {
   letter-spacing: 2px;
   border: 2px solid var(--line);
   padding: 3px 8px;
+}
+.target__progress {
+  display: block;
+  margin-top: 12px;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--muted);
 }
 .target__collected {
   margin-top: 20px;

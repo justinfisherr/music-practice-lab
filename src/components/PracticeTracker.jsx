@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage.js'
 import PracticeItem from './PracticeItem.jsx'
+import PracticeHabit from './PracticeHabit.jsx'
 
 const DAY = 86400000
 
@@ -95,6 +96,7 @@ export default function PracticeTracker() {
 
   return (
     <section className="tracker">
+      <PracticeHabit />
       <div className="tracker__bar">
         <span className="tracker__count">
           {dueCount} / {items.length} DUE
