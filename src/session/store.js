@@ -4,6 +4,7 @@ const KEYS = {
   dead: 'mpl.session.dead',
   sound: 'mpl.session.sound',
   serverCache: 'mpl.session.serverCache',
+  xp: 'mpl.xp',
 }
 
 const QUEUE_CAP = 50
@@ -61,6 +62,15 @@ export function loadDead() {
 }
 export function moveToDead(run) {
   safeWrite(KEYS.dead, [...loadDead().slice(-(DEAD_CAP - 1)), run])
+}
+
+export function loadXp() {
+  const value = Number(safeRead(KEYS.xp, 0))
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0
+}
+export function saveXp(total) {
+  const value = Number(total)
+  if (Number.isFinite(value)) safeWrite(KEYS.xp, Math.max(0, Math.round(value)))
 }
 
 export function loadSound() {

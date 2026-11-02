@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { deriveXp } from '../lib/xp.js'
 
 // Public, no-account session log. Auth is intentionally absent; the write
 // surface is protected by a CORS allowlist, strict shape validation, a 32KB
@@ -58,7 +59,7 @@ function db() {
 
 let schemaPromise = null
 
-async function ensure() {
+export async function ensure() {
   if (!schemaPromise) {
     schemaPromise = (async () => {
       const pool = db()
@@ -85,6 +86,32 @@ async function ensure() {
       await pool.query(
         'CREATE INDEX IF NOT EXISTS practice_sessions_key_date_idx ON practice.sessions (key_id, session_date DESC)',
       )
+      await pool.query(
+        'ALTER TABLE practice.sessions ADD COLUMN IF NOT EXISTS xp integer NOT NULL DEFAULT 0',
+      )
+      await pool.query(`DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'practice_sessions_xp_check'
+          ) THEN
+            ALTER TABLE practice.sessions
+              ADD CONSTRAINT practice_sessions_xp_check CHECK (xp BETWEEN 0 AND 1000) NOT VALID;
+          END IF;
+        END $$`)
+      await pool.query('ALTER TABLE practice.sessions VALIDATE CONSTRAINT practice_sessions_xp_check')
+      await pool.query(
+        "ALTER TABLE practice.sessions ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'graded'",
+      )
+      await pool.query(`DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'practice_sessions_kind_check'
+          ) THEN
+            ALTER TABLE practice.sessions
+              ADD CONSTRAINT practice_sessions_kind_check CHECK (kind IN ('graded','manual')) NOT VALID;
+          END IF;
+        END $$`)
+      await pool.query('ALTER TABLE practice.sessions VALIDATE CONSTRAINT practice_sessions_kind_check')
     })().catch((error) => {
       schemaPromise = null
       throw error
@@ -195,6 +222,8 @@ function validate(input) {
   if (!KEY_IDS.has(input.keyId)) throw invalid()
   if (!Number.isInteger(input.seed)) throw invalid()
   if (input.status !== 'done' && input.status !== 'abandoned') throw invalid()
+  const kind = input.kind ?? 'graded'
+  if (kind !== 'graded' && kind !== 'manual') throw invalid()
   if (!isoTime(input.startedAt) || !isoTime(input.endedAt)) throw invalid()
   const start = Date.parse(input.startedAt)
   const end = Date.parse(input.endedAt)
@@ -232,13 +261,15 @@ function validate(input) {
   const rawDuration = stageDuration > 0 ? stageDuration : elapsed
   const durationMs = Math.min(MAX_DURATION, Math.max(0, rawDuration))
 
-  return { ...input, sessionDate, attempts, misses, passedStages, durationMs }
+  return { ...input, kind, sessionDate, attempts, misses, passedStages, durationMs }
 }
 
 function summary(row) {
   return {
     id: row.id,
     date: row.date,
+    kind: row.kind || 'graded',
+    focus: row.focus || null,
     keyId: row.key_id,
     seed: row.seed,
     status: row.status,
@@ -248,7 +279,15 @@ function summary(row) {
     attempts: row.attempts,
     misses: row.misses,
     passedStages: row.passed_stages,
+    xp: row.xp,
   }
+}
+
+async function totalXp(pool) {
+  const { rows } = await pool.query(
+    'SELECT COALESCE(SUM(xp),0)::int AS total FROM practice.sessions',
+  )
+  return rows[0]?.total ?? 0
 }
 
 export default async function handler(req, res) {
@@ -267,7 +306,8 @@ export default async function handler(req, res) {
       if (id) {
         const { rows } = await pool.query(
           `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
-                  ended_at, duration_ms, attempts, misses, passed_stages, payload
+                  ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
+                  payload->>'focus' AS focus, payload
              FROM practice.sessions WHERE id = $1`,
           [String(id)],
         )
@@ -297,7 +337,8 @@ export default async function handler(req, res) {
       params.push(limit + 1)
       const { rows } = await pool.query(
         `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
-                ended_at, duration_ms, attempts, misses, passed_stages
+                ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
+                payload->>'focus' AS focus
            FROM practice.sessions
           ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
           ORDER BY session_date DESC, started_at DESC
@@ -307,17 +348,19 @@ export default async function handler(req, res) {
       return write(res, 200, {
         sessions: rows.slice(0, limit).map(summary),
         hasMore: rows.length > limit,
+        meta: { totalXp: await totalXp(pool) },
       })
     }
 
     if (req.method === 'POST') {
       if (rateLimited(req)) return write(res, 429, { error: 'rate_limited' })
       const input = validate(await body(req))
+      const xp = deriveXp(input.stages, input.status, input.kind)
       const { rows } = await pool.query(
         `INSERT INTO practice.sessions
           (id, session_date, key_id, seed, status, started_at, ended_at, duration_ms,
-           attempts, misses, passed_stages, payload, client)
-         VALUES ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,'web')
+           attempts, misses, passed_stages, xp, payload, client, kind)
+         VALUES ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,'web',$14)
          ON CONFLICT (id) DO NOTHING
          RETURNING id`,
         [
@@ -332,16 +375,28 @@ export default async function handler(req, res) {
           input.attempts,
           input.misses,
           input.passedStages,
+          xp,
           JSON.stringify(input.payload),
+          input.kind,
         ],
       )
-      if (!rows.length) return write(res, 200, { ok: true, duplicate: true, id: input.id })
+      if (!rows.length) {
+        return write(res, 200, {
+          ok: true,
+          duplicate: true,
+          id: input.id,
+          totalXp: await totalXp(pool),
+        })
+      }
       return write(res, 200, {
         ok: true,
         id: input.id,
         duplicate: false,
         date: input.sessionDate,
+        kind: input.kind,
         durationMs: input.durationMs,
+        xp,
+        totalXp: await totalXp(pool),
       })
     }
 

@@ -1,8 +1,16 @@
 import { useState } from 'react'
 import { keyById } from '../data/scales.js'
 import { noteName } from '../data/diminishedChords.js'
+import { xpBreakdown } from '../../lib/xp.js'
+import { LevelUpBlock } from './Rank.jsx'
 
 const STAGE_LABELS = { warmup: 'WARM-UP', ear: 'EAR CHECK', hook: 'HOOK' }
+const XP_LABELS = [
+  ['warmup', 'WARM-UP'],
+  ['ear', 'EAR'],
+  ['hook', 'HOOK'],
+  ['complete', 'COMPLETE'],
+]
 
 function clock(ms) {
   const total = Math.max(0, Math.round((ms || 0) / 1000))
@@ -30,7 +38,7 @@ function syncLine(syncState) {
   return { tone: '', text: 'SAVED TO THE LEDGER.' }
 }
 
-export default function SessionSummary({ session, syncState, onDone, onAgain }) {
+export default function SessionSummary({ session, syncState, onDone, onAgain, onOpenWardrobe }) {
   const [openHook, setOpenHook] = useState(false)
 
   if (!session || session.status === 'active') {
@@ -54,6 +62,7 @@ export default function SessionSummary({ session, syncState, onDone, onAgain }) 
   const stages = session.stages || []
   const totalAttempts = stages.reduce((sum, stage) => sum + stage.attempts, 0)
   const totalMisses = stages.reduce((sum, stage) => sum + stage.misses, 0)
+  const xp = xpBreakdown(stages, session.status)
 
   return (
     <section className="summary" aria-labelledby="summary-title">
@@ -69,6 +78,27 @@ export default function SessionSummary({ session, syncState, onDone, onAgain }) 
           {clock(duration)} · {totalAttempts} ATTEMPTS · {totalMisses} MISSES
         </p>
       </div>
+
+      <div className="xpbreak">
+        <div className="xpbreak__earned">
+          <span className="xpbreak__label">XP EARNED</span>
+          <span className="xpbreak__value">+{xp.total}</span>
+        </div>
+        <ul className="xpbreak__list">
+          {XP_LABELS.map(([id, label]) => (
+            <li key={id}>
+              <span>{label}</span>
+              <span className="xpbreak__num">+{xp[id]}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <LevelUpBlock
+        before={session.xpBefore}
+        after={syncState.totalXp}
+        onOpenWardrobe={onOpenWardrobe}
+      />
 
       <table className="summarytable">
         <thead>

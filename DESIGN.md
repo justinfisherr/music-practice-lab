@@ -73,3 +73,30 @@ The LEDGER is a paper surface with four block meters, a 12-cell key heat grid in
 
 **Do** keep the hard geometry, keep states as stamps, and keep labels literal.
 **Don't** soften the world with gradients, glass, or large radii, and don't put white text on mustard.
+
+## Rank & XP
+
+Each finished session earns XP on the server (`practice.sessions.xp`): warm-up 10 (+5 first try), ear 20 (+10), hook 35 (+15), plus 15 for finishing. The first occurrence of each stage counts, only passed stages count, and the total clamps to 1000 per session. `meta.totalXp` is the global sum across every session, and it is the single number the client trusts.
+
+The rank ladder is `L1 0 · L2 120 · L3 300 · L4 560 · L5 900 · L6 1320 · L7 1840 · L8 2460 · L9 3180 · L10 4000`, with titles OPENING ACT (L1-2), SIDE PLAYER (L3-4), SESSION PLAYER (L5-6), HEADLINER (L7-8), BANDLEADER (L9-10). `RankLine` sits inside the ink TONIGHT block; `XpBand` is a hard-ruled floor-to-next bar with tabular numbers; `RankCard` heads the Ledger; `LevelUpBlock` appears on the summary only when the session crossed a level.
+
+## Skins
+
+Six palettes are defined as `[data-skin]` blocks after `:root` — color tokens only, never component selectors. Skins change palette only: geometry, type, shadows, spacing, and motion are identical, so every surface stays legible in every skin.
+
+| skin | level | scheme | ground / ink | signal |
+| --- | --- | --- | --- | --- |
+| PAPER | 1 | light | `#f2f0e9` / `#111111` | `#e5342b` |
+| BLUE NOTE | 2 | light | `#edf0f4` / `#0d1b2a` | `#2f5ce0` |
+| SMOKE | 3 | light | `#e7e5e1` / `#171717` | `#c14a3a` |
+| KRAFT | 5 | light | `#e8dcc8` / `#231a10` | `#b8451f` |
+| SAGE | 7 | light | `#e6e9e0` / `#141a15` | `#3a7a48` |
+| REEL | 9 | dark | `#121212` / `#ece9df` | `#ff6a4d` |
+
+Each block sets `--scheme`, `--bg`, `--panel`, `--field`, `--ink`, `--muted`, `--line`, `--focus`, `--signal`, `--signal-ink`, `--ok`, `--ok-ink`, `--due`, `--muted-on-ink`, `--on-fill`, `--accent-soft`, `--warn-soft`, `--neutral-soft`, `--row-hover`, `--dot-off`, and `--heat-1..4`. The stored preference (`mpl.skin` / `mpl.skinMin` / `mpl.level`) is read by an inline boot script before first paint; a locked skin silently falls back to PAPER without erasing the preference.
+
+REEL inverts by construction: `--ink` becomes light, so the masthead, TONIGHT block, HOOK, session bar, and active nav flip. `--muted-on-ink` is dark (`#3a3833`) there, and `--on-fill` is near-black (`#101010`) so fills keep readable text.
+
+## Tokens and the fixed signal
+
+`--signal` is now defined in `:root` and every skin; it had been referenced by the START button without a value, leaving the primary action unfilled. Small signal text uses `--signal-ink`, never `--signal`. `--on-fill` is text placed on a filled control; `--field` is an input/raised surface, distinct from `--panel`. `color-scheme: var(--scheme)` lets form controls follow the active skin's light/dark scheme.

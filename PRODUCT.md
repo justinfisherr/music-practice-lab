@@ -21,6 +21,10 @@ Used at an instrument with a MIDI keyboard connected. Graded SESSION stages need
 ## Capabilities and Constraints
 Vite + React, Web MIDI, Vercel serverless + GitHub Pages static deploys. New nav sections in ROUTES, drills in src/drills, chord templates in chordData. No accounts. Drill and exercise history stays in local storage; SESSION is client-first and syncs idempotently to practice.sessions through /api/sessions. The daily Music practice habit posts one event to the vault's Postgres through a serverless endpoint, and the vault's Habits page reads it back.
 
+Every finished session earns XP, derived server-side from the stages that passed (first-try playing earns a bonus) and stored on the row; the ledger shows a global XP total. XP drives a ten-level rank ladder from OPENING ACT to BANDLEADER. Each level unlocks a palette skin (PAPER, BLUE NOTE, SMOKE, KRAFT, SAGE, REEL); the wardrobe lives inline in the ledger, and the chosen palette persists and boots before first paint. Skins change color only, never layout.
+
+The ear and hook phrases can be composed by an LLM through /api/plan. Generation is best-effort and time-boxed on both ends: a valid plan is used, and any delay, missing key, or malformed response falls back to the deterministic local composition, so START never waits for the network.
+
 ## Brand Commitments
 Brutalist music lab: warm paper, black rules, hard offset shadows, signal red, monospace type. No emojis.
 

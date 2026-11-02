@@ -1,5 +1,5 @@
 export const ENDPOINT =
-  import.meta.env.VITE_SESSIONS_ENDPOINT || 'https://music-practice-lab.vercel.app/api/sessions'
+  import.meta.env?.VITE_SESSIONS_ENDPOINT || 'https://music-practice-lab.vercel.app/api/sessions'
 
 export class ApiError extends Error {
   constructor(message, { status = 0, retryable = true, body = null } = {}) {

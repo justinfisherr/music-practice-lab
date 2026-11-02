@@ -54,6 +54,7 @@ export default function LedgerDetail({ id, onBack }) {
   }
 
   const key = keyById(run.keyId)
+  const manual = run.kind === 'manual'
   const payload = run.payload || {}
   const stages = run.stages || payload.stages || []
   const hook = payload.composition?.stages?.find((stage) => stage.id === 'hook')
@@ -69,19 +70,27 @@ export default function LedgerDetail({ id, onBack }) {
 
       <div className="detail__head">
         <span className="detail__kicker">
-          {run.date} · {run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}
+          {manual
+            ? `${run.date} · ${run.focus || 'OPEN'}`
+            : `${run.date} · ${run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}`}
         </span>
         <h2 className="detail__title" id="detail-title">
-          {key.label} MAJOR
+          {manual ? 'OPEN SESSION' : `${key.label} MAJOR`}
         </h2>
         <p className="detail__meta">
-          {clock(run.durationMs)} · {attempts} ATTEMPTS · {misses} MISSES · {passed}/3 STAGES
+          {manual
+            ? `${clock(run.durationMs)} · ${run.focus || 'OPEN SESSION'} · +0 XP`
+            : `${clock(run.durationMs)} · ${attempts} ATTEMPTS · ${misses} MISSES · ${passed}/3 STAGES · +${run.xp ?? 0} XP`}
         </p>
       </div>
 
       {error ? <p className="syncnote syncnote--queued">LEDGER OFFLINE — SHOWING THE LOCAL CACHE.</p> : null}
 
-      {stages.length ? (
+      {manual ? (
+        <div className="emptyblock">
+          OPEN SESSION · {run.focus || 'FREE PLAY'} · {clock(run.durationMs)}
+        </div>
+      ) : stages.length ? (
         <table className="summarytable">
           <thead>
             <tr>
@@ -123,7 +132,7 @@ export default function LedgerDetail({ id, onBack }) {
 
       <div className="queuebar">
         <span>RUN {run.id}</span>
-        <span>SEED {run.seed}</span>
+        <span>{manual ? 'OPEN SESSION' : `SEED ${run.seed}`}</span>
       </div>
     </section>
   )

@@ -83,17 +83,28 @@ export function useMidi() {
       setStatus('unsupported')
       return
     }
+    // Ignore a second call while the browser prompt is open.
+    if (status === 'requesting') return
     setStatus('requesting')
+    // If the permission promise never settles (no gesture / blocked prompt),
+    // fall back to idle so the button is usable again.
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      setStatus('idle')
+    }, 15000)
     try {
       const access = await navigator.requestMIDIAccess({ sysex: false })
+      clearTimeout(timer)
       accessRef.current = access
       access.onstatechange = () => refreshInputs()
       refreshInputs()
       setStatus('ready')
     } catch {
-      setStatus('denied')
+      clearTimeout(timer)
+      if (!timedOut) setStatus('denied')
     }
-  }, [supported, refreshInputs])
+  }, [supported, refreshInputs, status])
 
   const selectInput = useCallback(
     (id) => {

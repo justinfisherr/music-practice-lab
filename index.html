@@ -4,9 +4,19 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="description" content="Brutalist Music Lab — spaced-repetition practice tracker and MIDI diminished-chord trainer." />
     <title>BRUTALIST MUSIC LAB</title>
+    <script>
+      (function () {
+        try {
+          var s = localStorage.getItem('mpl.skin');
+          var min = Number(localStorage.getItem('mpl.skinMin') || 1);
+          var lvl = Number(localStorage.getItem('mpl.level') || 0);
+          if (s && min <= lvl) document.documentElement.dataset.skin = s;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

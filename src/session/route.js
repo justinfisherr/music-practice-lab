@@ -1,4 +1,4 @@
-export const VIEWS = ['session', 'practice', 'freeplay', 'dim7', 'quizzes', 'stats']
+export const VIEWS = ['session', 'freeplay', 'stats']
 export const SESSION_SUBS = ['run', 'summary']
 
 export function parseHash(hash = typeof window === 'undefined' ? '' : window.location.hash) {
@@ -12,6 +12,7 @@ export function parseHash(hash = typeof window === 'undefined' ? '' : window.loc
       view: 'stats',
       id: parts[1] ? decodeURIComponent(parts[1]) : null,
       key: query.get('key') || null,
+      wardrobe: query.get('wardrobe') === 'open',
     }
   }
 

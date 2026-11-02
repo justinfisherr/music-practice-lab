@@ -1,32 +1,37 @@
 import { useEffect, useState } from 'react'
 import Navigation from './components/Navigation.jsx'
-import PracticeTracker from './components/PracticeTracker.jsx'
-import MidiTrainer from './components/MidiTrainer.jsx'
 import FreePlay from './components/FreePlay.jsx'
-import QuizManager from './components/QuizManager.jsx'
 import SessionTab from './components/SessionTab.jsx'
 import SessionRun from './components/SessionRun.jsx'
 import SessionSummary from './components/SessionSummary.jsx'
 import Ledger from './components/Ledger.jsx'
 import LedgerDetail from './components/LedgerDetail.jsx'
+import ManualBar from './components/ManualBar.jsx'
 import { MidiProvider } from './hooks/MidiContext.jsx'
 import { useSession } from './session/useSession.js'
+import { useRank } from './session/useRank.js'
 import { navigate, parseHash } from './session/route.js'
 
-// Single source of truth for the app's primary sections. SESSION is the
-// default; the existing tabs keep their ids and components.
+// SESSION is the default; FREE PLAY is the sandbox and LEDGER is the record.
 const ROUTES = [
   { id: 'session', label: 'SESSION', component: SessionTab },
-  { id: 'practice', label: 'PRACTICE', component: PracticeTracker },
   { id: 'freeplay', label: 'FREE PLAY', component: FreePlay },
-  { id: 'dim7', label: 'DRILLS', component: MidiTrainer },
-  { id: 'quizzes', label: 'QUIZZES', component: QuizManager },
   { id: 'stats', label: 'LEDGER', component: Ledger },
 ]
 
 export default function App() {
   const [route, setRoute] = useState(() => parseHash())
   const practice = useSession()
+  const rank = useRank()
+  const { applyTotalXp } = rank
+
+  // The server is the XP source of truth: a GET's meta.totalXp or a POST's
+  // totalXp lands in syncState, and this is the one place it reaches the rank.
+  useEffect(() => {
+    if (Number.isFinite(practice.syncState.totalXp)) {
+      applyTotalXp(practice.syncState.totalXp)
+    }
+  }, [practice.syncState.totalXp, applyTotalXp])
 
   useEffect(() => {
     const onHash = () => {
@@ -43,9 +48,19 @@ export default function App() {
     navigate(view === 'session' ? 'session' : view)
   }
 
-  function startSession() {
-    practice.start()
+  function startSession(plan = null) {
+    practice.start(plan)
     navigate('session/run')
+  }
+
+  function startManual(focus) {
+    practice.startManual(focus)
+  }
+
+  function endManual() {
+    practice.finish()
+    practice.reset()
+    navigate('stats')
   }
 
   function playAgain() {
@@ -84,6 +99,7 @@ export default function App() {
           syncState={practice.syncState}
           onDone={done}
           onAgain={playAgain}
+          onOpenWardrobe={() => navigate('stats?wardrobe=open')}
         />
       )
     } else {
@@ -91,9 +107,12 @@ export default function App() {
         <SessionTab
           session={practice.session}
           onStart={startSession}
+          onStartManual={startManual}
           onResume={() => navigate('session/run')}
           onReview={() => navigate('session/summary')}
           onOpenLedger={() => navigate('stats')}
+          rank={rank}
+          onTotalXp={applyTotalXp}
         />
       )
     }
@@ -107,6 +126,9 @@ export default function App() {
         onOpen={openRun}
         onStartSession={() => navigate('session')}
         syncState={practice.syncState}
+        rank={rank}
+        onTotalXp={applyTotalXp}
+        wardrobeOpen={route.wardrobe}
       />
     )
   } else {
@@ -119,9 +141,12 @@ export default function App() {
       <div className="app">
         <header className="masthead">
           <h1 className="masthead__title">BRUTALIST MUSIC LAB</h1>
-          <p className="masthead__sub">PRACTICE MACHINE · v1</p>
+          <p className="masthead__sub">PRACTICE MACHINE · v2</p>
         </header>
         <Navigation routes={ROUTES} view={route.view} onChange={changeView} />
+        {practice.session?.kind === 'manual' && practice.session.status === 'active' ? (
+          <ManualBar session={practice.session} onEnd={endManual} />
+        ) : null}
         <main className="view">{content}</main>
       </div>
     </MidiProvider>

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { MAJOR_KEYS, keyById } from '../data/scales.js'
 import { getRuns } from '../session/api.js'
 import * as store from '../session/store.js'
+import { RankCard } from './Rank.jsx'
+import Wardrobe from './Wardrobe.jsx'
 
 function clock(ms) {
   const total = Math.max(0, Math.round((ms || 0) / 1000))
@@ -10,16 +12,31 @@ function clock(ms) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-export default function Ledger({ filterKey, onFilter, onOpen, onStartSession, syncState }) {
+export default function Ledger({
+  filterKey,
+  onFilter,
+  onOpen,
+  onStartSession,
+  syncState,
+  rank,
+  onTotalXp,
+  wardrobeOpen,
+}) {
   const [runs, setRuns] = useState(() => store.loadCachedRuns())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showWardrobe, setShowWardrobe] = useState(!!wardrobeOpen)
+
+  useEffect(() => {
+    if (wardrobeOpen) setShowWardrobe(true)
+  }, [wardrobeOpen])
 
   useEffect(() => {
     let live = true
     getRuns({ limit: 100 })
       .then((body) => {
         if (!live) return
+        if (Number.isFinite(body?.meta?.totalXp)) onTotalXp?.(body.meta.totalXp)
         const list = Array.isArray(body.sessions) ? body.sessions : []
         store.cacheRuns(list)
         setRuns(list)
@@ -34,16 +51,21 @@ export default function Ledger({ filterKey, onFilter, onOpen, onStartSession, sy
     return () => {
       live = false
     }
-  }, [])
+  }, [onTotalXp])
 
-  const filtered = filterKey ? runs.filter((run) => run.keyId === filterKey) : runs
+  const filtered = filterKey
+    ? runs.filter((run) => run.kind !== 'manual' && run.keyId === filterKey)
+    : runs
   const counts = new Map()
-  for (const run of runs) counts.set(run.keyId, (counts.get(run.keyId) || 0) + 1)
+  for (const run of runs) {
+    if (run.kind === 'manual') continue
+    counts.set(run.keyId, (counts.get(run.keyId) || 0) + 1)
+  }
   const maxCount = Math.max(1, ...counts.values())
   const presentKeys = MAJOR_KEYS.filter((key) => counts.has(key.id)).map((key) => key.id)
 
   const minutes = Math.round(filtered.reduce((sum, run) => sum + (run.durationMs || 0), 0) / 60000)
-  const stageTotal = filtered.length * 3
+  const stageTotal = filtered.filter((run) => run.kind !== 'manual').length * 3
   const passed = filtered.reduce((sum, run) => sum + (run.passedStages || 0), 0)
   const misses = filtered.reduce((sum, run) => sum + (run.misses || 0), 0)
   const passRate = stageTotal ? Math.round((passed / stageTotal) * 100) : 0
@@ -58,6 +80,9 @@ export default function Ledger({ filterKey, onFilter, onOpen, onStartSession, sy
           {runs.length} SESSION{runs.length === 1 ? '' : 'S'} ON RECORD
         </span>
       </div>
+
+      <RankCard rank={rank} onOpenWardrobe={() => setShowWardrobe((value) => !value)} />
+      {showWardrobe ? <Wardrobe level={rank?.level ?? 1} /> : null}
 
       {syncState.pending > 0 || syncState.dead > 0 ? (
         <p className={`syncnote${syncState.dead ? ' syncnote--dead' : ' syncnote--queued'}`}>
@@ -177,20 +202,25 @@ export default function Ledger({ filterKey, onFilter, onOpen, onStartSession, sy
         </div>
       ) : (
         <div className="runlist">
-          {filtered.map((run) => (
-            <button type="button" className="runrow" key={run.id} onClick={() => onOpen(run.id)}>
-              <span className="runrow__date">
-                {run.date} · {clock(run.durationMs)}
-              </span>
-              <span className="runrow__key">{run.keyId}</span>
-              <span className="runrow__stats">
-                {run.attempts} ATTEMPTS · {run.misses} MISSES · {run.passedStages}/3 STAGES
-              </span>
-              <span className={`runrow__status${run.status === 'abandoned' ? ' is-abandoned' : ''}`}>
-                {run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}
-              </span>
-            </button>
-          ))}
+          {filtered.map((run) => {
+            const manual = run.kind === 'manual'
+            return (
+              <button type="button" className="runrow" key={run.id} onClick={() => onOpen(run.id)}>
+                <span className="runrow__date">
+                  {run.date} · {clock(run.durationMs)}
+                </span>
+                <span className="runrow__key">{manual ? run.focus || 'OPEN' : run.keyId}</span>
+                <span className="runrow__stats">
+                  {manual
+                    ? 'OPEN SESSION'
+                    : `${run.attempts} ATTEMPTS · ${run.misses} MISSES · ${run.passedStages}/3 STAGES`}
+                </span>
+                <span className={`runrow__status${run.status === 'abandoned' ? ' is-abandoned' : ''}`}>
+                  {manual ? 'DONE' : run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}
+                </span>
+              </button>
+            )
+          })}
         </div>
       )}
 

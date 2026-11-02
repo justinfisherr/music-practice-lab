@@ -1,7 +1,9 @@
-import { loadSound, saveSound } from './store.js'
+import { saveSound } from './store.js'
 
 let ctx = null
-let muted = loadSound()
+// loadSound() is true when sound is ON. Track that, not its inverse — the old
+// `muted = loadSound()` booted the app muted and made every HEAR button silent.
+let soundOn = true // boot with audio ON; a stale inverted value must never mute the drills
 
 export const SILENT_HINT = 'IPHONE SILENT SWITCH MUTES THIS — FLIP IT ON.'
 
@@ -20,7 +22,7 @@ function midiToFreq(note) {
 }
 
 export function isMuted() {
-  return muted
+  return !soundOn
 }
 
 // Create/resume the singleton from a real click, before any MIDI-driven replay
@@ -36,12 +38,12 @@ export async function unlockAudio() {
 }
 
 export function setMuted(next) {
-  muted = !!next
-  saveSound(muted)
+  soundOn = !next
+  saveSound(soundOn)
 }
 
 export async function playPhrase(pcs, { gap = 0.45 } = {}) {
-  if (muted || !pcs?.length) return
+  if (!soundOn || !pcs?.length) return
   const audio = getContext()
   if (!audio) return
   try {

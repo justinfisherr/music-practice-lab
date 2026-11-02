@@ -27,13 +27,14 @@ function makeStages(startedAt) {
   }))
 }
 
-export function makeSession(now = Date.now()) {
+export function makeSession(now = Date.now(), plan = null) {
   const date = laDate(new Date(now))
   const keyId = tonightKey(date)
   const seed = seedFor(date, keyId)
   const startedAt = new Date(now).toISOString()
   return {
     id: newId(),
+    kind: 'graded',
     date,
     keyId,
     seed,
@@ -43,8 +44,35 @@ export function makeSession(now = Date.now()) {
     pausedAt: null,
     pausedMs: 0,
     currentStage: 0,
+    xpBefore: store.loadXp(),
     stages: makeStages(startedAt),
-    composition: composeSession({ date, keyId, seed }),
+    composition: composeSession({ date, keyId, seed, plan }),
+  }
+}
+
+// A manual session is a timed container for lessons, free play, drills, or
+// listening. It has no stages and never earns XP.
+export function makeManualSession(now = Date.now(), focus = 'FREE PLAY') {
+  const date = laDate(new Date(now))
+  const keyId = tonightKey(date)
+  const seed = seedFor(date, keyId)
+  const startedAt = new Date(now).toISOString()
+  return {
+    id: newId(),
+    kind: 'manual',
+    focus,
+    date,
+    keyId,
+    seed,
+    status: 'active',
+    startedAt,
+    endedAt: null,
+    pausedAt: null,
+    pausedMs: 0,
+    currentStage: 0,
+    xpBefore: store.loadXp(),
+    stages: [],
+    composition: null,
   }
 }
 
@@ -124,6 +152,8 @@ export function toPayload(session) {
   if (!session) return null
   return {
     id: session.id,
+    kind: session.kind || 'graded',
+    focus: session.focus || null,
     date: session.date,
     keyId: session.keyId,
     seed: session.seed,
@@ -144,7 +174,9 @@ export function toPayload(session) {
       finishedAt: stage.finishedAt,
     })),
     payload: {
-      source: 'local',
+      source: session.kind === 'manual' ? 'manual' : session.composition?.source || 'local',
+      focus: session.focus || null,
+      rationale: session.composition?.rationale ?? null,
       composition: session.composition,
       stages: session.stages.map((stage) => ({
         id: stage.id,
@@ -164,6 +196,7 @@ function initialSync() {
     syncing: false,
     online: typeof navigator === 'undefined' ? true : navigator.onLine,
     lastError: null,
+    totalXp: null,
   }
 }
 
@@ -207,11 +240,13 @@ export function useSession() {
           const result = await postRun(run)
           store.removeQueued(run.id)
           store.cacheRun({ ...run, server: result })
+          if (Number.isFinite(result?.totalXp)) store.saveXp(result.totalXp)
           setSync((prev) => ({
             ...prev,
             pending: store.loadQueue().length,
             dead: store.loadDead().length,
             lastError: null,
+            totalXp: Number.isFinite(result?.totalXp) ? result.totalXp : prev.totalXp,
           }))
         } catch (error) {
           // A bad row is dead-lettered. A network/5xx/429 failure keeps the
@@ -243,11 +278,23 @@ export function useSession() {
     }
   }, [])
 
-  const start = useCallback(() => {
-    const next = makeSession()
-    commit(next)
-    return next
-  }, [commit])
+  const start = useCallback(
+    (plan = null) => {
+      const next = makeSession(Date.now(), plan)
+      commit(next)
+      return next
+    },
+    [commit],
+  )
+
+  const startManual = useCallback(
+    (focus = 'FREE PLAY') => {
+      const next = makeManualSession(Date.now(), focus)
+      commit(next)
+      return next
+    },
+    [commit],
+  )
 
   const recordAttempt = useCallback(
     (stageId, miss = false) => dispatch({ type: 'attempt', stageId, miss }),
@@ -302,6 +349,7 @@ export function useSession() {
   return {
     session,
     start,
+    startManual,
     recordAttempt,
     advanceStage,
     finish,

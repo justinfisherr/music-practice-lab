@@ -229,6 +229,16 @@ function WarmupStage({ session, recordAttempt, advanceStage, disabled }) {
         setResult(null)
         setArmed(true)
       }, 900)
+    } else {
+      // Miss: replay the correct chord once, then re-ask the same chord.
+      timerRef.current = setTimeout(() => {
+        playPhrase(target.pitchClasses)
+        timerRef.current = setTimeout(() => {
+          setNotes([])
+          setResult(null)
+          setArmed(true)
+        }, target.pitchClasses.length * 450 + 250)
+      }, 900)
     }
     gradingRef.current = false
   }
@@ -260,14 +270,9 @@ function WarmupStage({ session, recordAttempt, advanceStage, disabled }) {
     setArmed(true)
   }
 
-  function tryAgain() {
-    setNotes([])
-    setResult(null)
-    setArmed(true)
-  }
-
   function hearChord() {
     if (timerRef.current) clearTimeout(timerRef.current)
+    unlockAudio()
     setArmed(false)
     setNotes([])
     setResult(null)
@@ -371,11 +376,6 @@ function WarmupStage({ session, recordAttempt, advanceStage, disabled }) {
             >
               HEAR CHORD
             </button>
-            {result && !result.passed ? (
-              <button type="button" className="btn btn--signal" onClick={tryAgain} disabled={disabled}>
-                TRY AGAIN
-              </button>
-            ) : null}
           </div>
         </>
       )}
@@ -392,6 +392,8 @@ function EarStage({ session, recordAttempt, advanceStage, disabled }) {
   const playedRef = useRef([])
   const timerRef = useRef(null)
   const gradingRef = useRef(false)
+  const disabledRef = useRef(disabled)
+  disabledRef.current = disabled
 
   useEffect(
     () => () => {
@@ -407,6 +409,7 @@ function EarStage({ session, recordAttempt, advanceStage, disabled }) {
 
   function hear() {
     if (timerRef.current) clearTimeout(timerRef.current)
+    unlockAudio()
     setPhase('listening')
     setResult(null)
     setNotes([])
@@ -425,7 +428,19 @@ function EarStage({ session, recordAttempt, advanceStage, disabled }) {
     setResult(diff)
     setPlayed(notes)
     setPhase('result')
-    if (!diff.passed) setFails((value) => value + 1)
+    if (!diff.passed) {
+      setFails((value) => value + 1)
+      // Miss: replay the phrase, then automatically re-arm the same attempt.
+      timerRef.current = setTimeout(() => {
+        if (disabledRef.current) {
+          setNotes([])
+          setResult(null)
+          setPhase('your-turn')
+          return
+        }
+        hear()
+      }, 1200)
+    }
     gradingRef.current = false
   }
 
@@ -448,7 +463,7 @@ function EarStage({ session, recordAttempt, advanceStage, disabled }) {
   })
 
   const matched = result ? result.rows.filter((row) => row.status === 'match').length : 0
-  const canSkip = fails >= 2 && result && !result.passed
+  const canSkip = fails >= 2
 
   return (
     <div className="stagecard">
@@ -474,6 +489,13 @@ function EarStage({ session, recordAttempt, advanceStage, disabled }) {
           <p className="verdictline">YOUR TURN — PLAY THE FOUR NOTES.</p>
           <NoteCells target={stage.pcs} played={played} result={null} />
           <p className="hintline">Stop early and the silence timer grades what you gave it.</p>
+          {canSkip ? (
+            <div className="stagefoot">
+              <button type="button" className="btn btn--ghost" onClick={() => advanceStage(false)}>
+                SKIP TO THE HOOK
+              </button>
+            </div>
+          ) : null}
         </>
       ) : null}
 
@@ -495,18 +517,6 @@ function EarStage({ session, recordAttempt, advanceStage, disabled }) {
               <>
                 <button type="button" className="btn" onClick={hear}>
                   LISTEN AGAIN
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    setNotes([])
-                    setResult(null)
-                    setPhase('your-turn')
-                  }}
-                  disabled={disabled}
-                >
-                  TRY AGAIN
                 </button>
                 {canSkip ? (
                   <button type="button" className="btn btn--ghost" onClick={() => advanceStage(false)}>
@@ -565,6 +575,8 @@ function HookStage({ session, recordAttempt, advanceStage, finish, onFinished, d
   const timersRef = useRef([])
   const gradingRef = useRef(false)
   const finishedRef = useRef(false)
+  const disabledRef = useRef(disabled)
+  disabledRef.current = disabled
 
   useEffect(
     () => () => {
@@ -586,13 +598,16 @@ function HookStage({ session, recordAttempt, advanceStage, finish, onFinished, d
 
   function hear() {
     clearTimers()
+    unlockAudio()
     setResult(null)
     setPhase('listening')
     setNotes([])
     setLit(-1)
+    const beats = Array.isArray(stage.beats) ? stage.beats : [0, 1, 2, 4, 5, 6]
+    const pcs = Array.isArray(stage.pcs) ? stage.pcs : []
     const performance = Array.from({ length: 8 }, (_, beat) => {
-      const index = stage.beats.indexOf(beat)
-      return index >= 0 ? stage.pcs[index] : null
+      const index = beats.indexOf(beat)
+      return index >= 0 ? pcs[index] : null
     })
     playPhrase(performance, { gap: 0.5 })
     for (let beat = 0; beat < 8; beat++) {
@@ -614,7 +629,21 @@ function HookStage({ session, recordAttempt, advanceStage, finish, onFinished, d
     setResult(diff)
     setPlayed(notes)
     setPhase('result')
-    if (!diff.passed) setFails((value) => value + 1)
+    if (!diff.passed) {
+      setFails((value) => value + 1)
+      // Miss: replay the hook, then automatically re-arm the attempt.
+      timersRef.current.push(
+        setTimeout(() => {
+          if (disabledRef.current) {
+            setNotes([])
+            setResult(null)
+            setPhase('your-turn')
+            return
+          }
+          hear()
+        }, 1200),
+      )
+    }
     gradingRef.current = false
   }
 
@@ -642,12 +671,6 @@ function HookStage({ session, recordAttempt, advanceStage, finish, onFinished, d
     advanceStage(true)
     finish()
     onFinished()
-  }
-
-  function tryAgain() {
-    setNotes([])
-    setResult(null)
-    setPhase('your-turn')
   }
 
   const beatNotes = new Map(stage.beats.map((beat, index) => [beat, { pc: stage.pcs[index], index }]))
@@ -753,14 +776,9 @@ function HookStage({ session, recordAttempt, advanceStage, finish, onFinished, d
                 FINISH SESSION
               </button>
             ) : (
-              <>
-                <button type="button" className="btn" onClick={hear}>
-                  LISTEN AGAIN
-                </button>
-                <button type="button" className="btn" onClick={tryAgain} disabled={disabled}>
-                  TRY AGAIN
-                </button>
-              </>
+              <button type="button" className="btn" onClick={hear}>
+                LISTEN AGAIN
+              </button>
             )}
           </div>
           {!result.passed && fails >= 2 ? (
