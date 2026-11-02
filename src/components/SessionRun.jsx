@@ -5,6 +5,8 @@ import { gradeSequence } from '../session/grade.js'
 import { EAR_GAP } from '../session/phrases.js'
 import { isMuted, playPhrase, setMuted, SILENT_HINT, unlockAudio } from '../session/audio.js'
 import { noteName, pitchClassesEqual } from '../data/diminishedChords.js'
+import { keyDisplay } from '../data/scales.js'
+import ModuleStage from './ModuleStage.jsx'
 
 function clock(ms) {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -95,7 +97,7 @@ export default function SessionRun({ practice, onFinished, onExit }) {
   return (
     <section className="sessionrun" aria-label="Tonight's session">
       <div className="sessionbar">
-        <span className="sessionbar__key">{session.keyId} MAJOR</span>
+        <span className="sessionbar__key">{keyDisplay(session.keyId)} MAJOR</span>
         <span className="sessionbar__timer" aria-label={`Elapsed ${clock(elapsed)}`}>
           {clock(elapsed)}
         </span>
@@ -146,6 +148,19 @@ export default function SessionRun({ practice, onFinished, onExit }) {
 
       {!session.composition ? (
         <div className="emptyblock">SESSION DATA MISSING. LEAVE AND START AGAIN.</div>
+      ) : session.composition.version === 3 ? (
+        <ModuleStage
+          key={`${stageId}-${session.currentStage}`}
+          module={session.composition.modules?.[session.currentStage]}
+          position={session.currentStage}
+          total={session.stages.length}
+          keyId={session.keyId}
+          recordAttempt={recordAttempt}
+          advanceStage={advanceStage}
+          finish={finish}
+          onFinished={onFinished}
+          disabled={pausedForInput}
+        />
       ) : stageId === 'warmup' ? (
         <WarmupStage
           session={session}
@@ -283,7 +298,7 @@ function WarmupStage({ session, recordAttempt, advanceStage, disabled }) {
   return (
     <div className="stagecard">
       <StageHead
-        eyebrow={`STAGE 1 OF 3 · ${session.keyId} MAJOR`}
+        eyebrow={`STAGE 1 OF 3 · ${keyDisplay(session.keyId)} MAJOR`}
         title="WARM-UP"
         copy="Hear the scale. Play the seven diatonic triads in order, then close on the V chord."
       />
@@ -468,7 +483,7 @@ function EarStage({ session, recordAttempt, advanceStage, disabled }) {
   return (
     <div className="stagecard">
       <StageHead
-        eyebrow={`STAGE 2 OF 3 · ${session.keyId} MAJOR`}
+        eyebrow={`STAGE 2 OF 3 · ${keyDisplay(session.keyId)} MAJOR`}
         title="EAR CHECK"
         copy="Four diatonic notes at 96 BPM. Hear it, then play it back in order."
       />
@@ -683,7 +698,7 @@ function HookStage({ session, recordAttempt, advanceStage, finish, onFinished, d
         <span className="hook__meta">
           STAGE 3 OF 3
           <br />
-          {session.keyId} MAJOR
+          {keyDisplay(session.keyId)} MAJOR
         </span>
       </div>
       <p className="hook__copy">

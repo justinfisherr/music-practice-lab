@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { keyById } from '../data/scales.js'
+import { keyDisplay } from '../data/scales.js'
 import { noteName } from '../data/diminishedChords.js'
 import { xpBreakdown } from '../../lib/xp.js'
 import { LevelUpBlock } from './Rank.jsx'
@@ -55,8 +55,8 @@ export default function SessionSummary({ session, syncState, onDone, onAgain, on
     )
   }
 
-  const key = keyById(session.keyId)
-  const hook = session.composition?.stages?.find((stage) => stage.id === 'hook')
+  const v3 = session.composition?.version === 3
+  const hook = v3 ? null : session.composition?.stages?.find((stage) => stage.id === 'hook')
   const sync = syncLine(syncState)
   const duration = session.durationMs || 0
   const stages = session.stages || []
@@ -72,7 +72,7 @@ export default function SessionSummary({ session, syncState, onDone, onAgain, on
           {session.date}
         </span>
         <h2 className="summary__title" id="summary-title">
-          {key.label} MAJOR
+          {keyDisplay(session.keyId)} MAJOR
         </h2>
         <p className="summary__meta">
           {clock(duration)} · {totalAttempts} ATTEMPTS · {totalMisses} MISSES
@@ -85,12 +85,25 @@ export default function SessionSummary({ session, syncState, onDone, onAgain, on
           <span className="xpbreak__value">+{xp.total}</span>
         </div>
         <ul className="xpbreak__list">
-          {XP_LABELS.map(([id, label]) => (
-            <li key={id}>
-              <span>{label}</span>
-              <span className="xpbreak__num">+{xp[id]}</span>
+          {Array.isArray(xp.modules)
+            ? xp.modules.map((module) => (
+                <li key={module.id}>
+                  <span>{module.title}</span>
+                  <span className="xpbreak__num">+{module.xp}</span>
+                </li>
+              ))
+            : XP_LABELS.map(([id, label]) => (
+                <li key={id}>
+                  <span>{label}</span>
+                  <span className="xpbreak__num">+{xp[id]}</span>
+                </li>
+              ))}
+          {Array.isArray(xp.modules) ? (
+            <li>
+              <span>COMPLETE</span>
+              <span className="xpbreak__num">+{xp.complete}</span>
             </li>
-          ))}
+          ) : null}
         </ul>
       </div>
 
@@ -111,8 +124,8 @@ export default function SessionSummary({ session, syncState, onDone, onAgain, on
         </thead>
         <tbody>
           {stages.map((stage) => (
-            <tr key={stage.id}>
-              <td>{STAGE_LABELS[stage.id] || stage.id}</td>
+            <tr key={`${stage.id}-${stage.position ?? 0}`}>
+              <td>{stage.title || STAGE_LABELS[stage.id] || stage.id}</td>
               <td>{stage.attempts}</td>
               <td>{stage.misses}</td>
               <td className={stage.passed ? 'is-pass' : 'is-fail'}>

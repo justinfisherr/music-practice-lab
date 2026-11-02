@@ -80,13 +80,22 @@ test('hook phrases are deterministic, six notes, and in key', () => {
   assert.ok(first.every((pc) => key.has(pc)))
 })
 
-test('composeSession returns the three stages in order', () => {
+test('composeSession returns 3-5 v3 modules, easiest first, no repeats', () => {
   const composed = composeSession({ date: '2026-11-01', keyId: 'C', seed: 7 })
-  assert.deepEqual(
-    composed.stages.map((stage) => stage.id),
-    ['warmup', 'ear', 'hook'],
-  )
-  assert.equal(composed.stages[0].triads.length, 7)
-  assert.equal(composed.stages[1].pcs.length, 4)
-  assert.equal(composed.stages[2].pcs.length, 6)
+  assert.equal(composed.version, 3)
+  assert.ok(composed.modules.length >= 3 && composed.modules.length <= 5)
+  assert.equal(new Set(composed.modules.map((module) => module.type)).size, composed.modules.length)
+  for (let i = 1; i < composed.modules.length; i++) {
+    assert.ok(composed.modules[i].tier >= composed.modules[i - 1].tier)
+  }
+  assert.ok(composed.modules.every((module) => module.targets.length > 0))
+})
+
+test('composeSession is deterministic for a date, key and variant', () => {
+  const first = composeSession({ date: '2026-11-01', keyId: 'C', seed: 7, variant: 'tonight' })
+  const second = composeSession({ date: '2026-11-01', keyId: 'C', seed: 7, variant: 'tonight' })
+  assert.deepEqual(first.modules, second.modules)
+  const bonus = composeSession({ date: '2026-11-01', keyId: 'C', seed: 7, variant: 'bonus' })
+  assert.equal(bonus.variant, 'bonus')
+  assert.ok(bonus.modules.every((module) => module.tier > 1))
 })

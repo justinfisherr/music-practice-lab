@@ -1,5 +1,8 @@
 import pg from 'pg'
-import { buildMessages, parsePlan } from '../lib/plan.js'
+import { buildMessages, buildModuleMessages, parseModulePlan, parsePlan } from '../lib/plan.js'
+import { validatePlan } from '../lib/modules.js'
+import { seedFor } from '../src/session/tonight.js'
+import { resolvePlan } from '../src/data/modules.js'
 
 // LLM-composed drill plan. Generation is best-effort: every failure path is a
 // 200 { source: 'standard' }, because a missing plan must never break START.
@@ -136,25 +139,38 @@ async function recentRows() {
   try {
     if (!process.env.DATABASE_URL) return []
     const { rows } = await getPool().query(
-      `SELECT key_id, session_date::text AS date, passed_stages, attempts
+      `SELECT key_id, session_date::text AS date, passed_stages, attempts,
+              payload->'composition'->'modules' AS modules
          FROM practice.sessions
+        WHERE kind = 'graded'
         ORDER BY session_date DESC, started_at DESC
-        LIMIT 5`,
+        LIMIT 12`,
     )
-    return rows.map((row) => ({
-      keyId: row.key_id,
-      date: row.date,
-      passedStages: row.passed_stages,
-      attempts: row.attempts,
-    }))
+    const nights = []
+    const seen = new Set()
+    for (const row of rows) {
+      if (seen.has(row.date)) continue
+      seen.add(row.date)
+      const modules = Array.isArray(row.modules) ? row.modules : []
+      nights.push({
+        keyId: row.key_id,
+        date: row.date,
+        passedStages: row.passed_stages,
+        attempts: row.attempts,
+        types: modules.map((module) => module?.type).filter(Boolean),
+      })
+      if (nights.length === 3) break
+    }
+    return nights
   } catch {
     return []
   }
 }
 
-async function generate({ date, keyId }) {
+async function generate({ date, keyId, version = 2, variant = 'tonight' }) {
   const key = process.env.OPENROUTER_API_KEY
   if (!key) return { source: 'standard' }
+  const modulePlan = version === 3
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
@@ -170,11 +186,13 @@ async function generate({ date, keyId }) {
       body: JSON.stringify({
         model: MODEL,
         temperature: 0.9,
-        max_tokens: 220,
+        max_tokens: modulePlan ? 900 : 220,
         // The pinned model reasons by default and would spend the whole 220
         // tokens before emitting JSON; disable reasoning so content arrives.
         reasoning: { enabled: false },
-        messages: buildMessages({ date, keyId, recent }),
+        messages: modulePlan
+          ? buildModuleMessages({ date, keyId, variant, recent })
+          : buildMessages({ date, keyId, recent }),
       }),
     })
     if (!res.ok) {
@@ -183,6 +201,21 @@ async function generate({ date, keyId }) {
     }
     const data = await res.json().catch(() => null)
     const text = data?.choices?.[0]?.message?.content
+    if (modulePlan) {
+      const parsed = parseModulePlan(text)
+      if (!parsed) return { source: 'standard' }
+      const checked = validatePlan(parsed, {
+        recent: recent.map((night) => night.types),
+      })
+      if (!checked.ok) return { source: 'standard' }
+      const resolved = resolvePlan({ plan: checked.value, keyId, seed: seedFor(date, keyId) })
+      if (!resolved) return { source: 'standard' }
+      return {
+        source: 'llm',
+        rationale: resolved.rationale,
+        modules: resolved.modules,
+      }
+    }
     const parsed = parsePlan(text)
     if (!parsed) return { source: 'standard' }
     return {
@@ -214,7 +247,10 @@ export default async function handler(req, res) {
 
   const date = String(req.query?.date || '')
   const keyId = String(req.query?.keyId || '')
-  const cacheKey = `${date}|${keyId}`
+  const version = Number(req.query?.version) === 3 ? 3 : 2
+  const rawVariant = String(req.query?.variant || 'tonight')
+  const variant = rawVariant === 'bonus' ? 'bonus' : rawVariant === 'tonight' ? 'tonight' : null
+  const cacheKey = `${date}|${keyId}|v${version}|${variant || 'invalid'}`
 
   const cached = memo.get(cacheKey)
   if (cached && Date.now() - cached.at < ttlFor(cached.value)) {
@@ -227,16 +263,30 @@ export default async function handler(req, res) {
   }
 
   const request = (async () => {
-    // Invalid input, rate limiting, or a missing key is a standard night.
-    if (!validDate(date) || !KEY_IDS.has(keyId) || rateLimited(req)) {
+    try {
+      // Invalid input, variant, rate limiting, or a missing key is a standard night.
+      if (!validDate(date) || !KEY_IDS.has(keyId) || !variant || rateLimited(req)) {
+        return { source: 'standard' }
+      }
+      const value = await generate({ date, keyId, version, variant })
+      remember(cacheKey, value)
+      return value
+    } catch (error) {
+      console.warn('plan', error?.name === 'AbortError' ? 'timeout' : 'error')
       return { source: 'standard' }
     }
-    const value = await generate({ date, keyId })
-    remember(cacheKey, value)
-    return value
   })()
 
   inflight.set(cacheKey, request)
   const value = await request.finally(() => inflight.delete(cacheKey))
-  return writePlan(res, value)
+  if (version === 2) return writePlan(res, value)
+  return writePlan(res, {
+    source: value.source === 'llm' ? 'llm' : 'standard',
+    version: 3,
+    date,
+    keyId,
+    variant: variant || rawVariant,
+    rationale: value.rationale || null,
+    modules: Array.isArray(value.modules) ? value.modules : [],
+  })
 }

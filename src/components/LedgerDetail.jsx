@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { keyById } from '../data/scales.js'
+import { keyDisplay } from '../data/scales.js'
 import { noteName } from '../data/diminishedChords.js'
 import { getRun } from '../session/api.js'
 import * as store from '../session/store.js'
@@ -53,7 +53,6 @@ export default function LedgerDetail({ id, onBack }) {
     )
   }
 
-  const key = keyById(run.keyId)
   const manual = run.kind === 'manual'
   const payload = run.payload || {}
   const stages = run.stages || payload.stages || []
@@ -75,7 +74,7 @@ export default function LedgerDetail({ id, onBack }) {
             : `${run.date} · ${run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}`}
         </span>
         <h2 className="detail__title" id="detail-title">
-          {manual ? 'OPEN SESSION' : `${key.label} MAJOR`}
+          {manual ? 'OPEN SESSION' : `${keyDisplay(run.keyId)} MAJOR`}
         </h2>
         <p className="detail__meta">
           {manual

@@ -62,3 +62,35 @@ test('returns null for non-JSON', () => {
   assert.equal(parsePlan('not json'), null)
   assert.equal(parsePlan(null), null)
 })
+
+// ---- v3 module plans --------------------------------------------------------
+import { parseModulePlan } from '../../lib/plan.js'
+
+test('parses a clean v3 module plan', () => {
+  const plan = parseModulePlan(
+    JSON.stringify({
+      rationale: 'a compact, lower-case plan',
+      modules: [{ type: 'SCALE' }, { type: 'EAR' }, { type: 'II_V_I' }],
+    }),
+  )
+  assert.equal(plan.rationale, 'a compact, lower-case plan')
+  assert.deepEqual(plan.modules.map((module) => module.type), ['SCALE', 'EAR', 'II_V_I'])
+})
+
+test('rejects a v3 plan with uppercase or shouting rationale', () => {
+  const modules = [{ type: 'SCALE' }, { type: 'EAR' }, { type: 'II_V_I' }]
+  assert.equal(parseModulePlan(JSON.stringify({ rationale: 'A Plan', modules })), null)
+  assert.equal(parseModulePlan(JSON.stringify({ rationale: 'a plan!', modules })), null)
+})
+
+test('rejects a v3 plan that breaks the module constraints', () => {
+  assert.equal(
+    parseModulePlan(
+      JSON.stringify({
+        rationale: 'all hard, no floor',
+        modules: [{ type: 'II_V_I' }, { type: 'GUIDE_TONES' }, { type: 'PASSING_DIM' }],
+      }),
+    ),
+    null,
+  )
+})

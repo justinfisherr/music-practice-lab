@@ -45,3 +45,40 @@ test('xp breakdown names each award', () => {
     total: 110,
   })
 })
+
+// ---- v3 module vectors ------------------------------------------------------
+const mod = (id, tier, attempts, passed) => ({
+  id,
+  tier,
+  title: id.toUpperCase(),
+  attempts,
+  misses: attempts - (passed ? 1 : 0),
+  passed,
+})
+
+test('v3 three tier-1 modules first try scores 60', () => {
+  const stages = [mod('scale', 1, 1, true), mod('triads', 1, 1, true), mod('ear', 1, 1, true)]
+  assert.equal(deriveXp(stages, 'done'), 60)
+})
+
+test('v3 mixed tiers first try scores 83', () => {
+  const stages = [mod('scale', 1, 1, true), mod('maj7', 2, 1, true), mod('ii_v_i', 3, 1, true)]
+  assert.equal(deriveXp(stages, 'done'), 83)
+})
+
+test('v3 retries lose the first-try bonus but keep the base', () => {
+  const stages = [mod('scale', 1, 2, true), mod('maj7', 2, 3, true), mod('ii_v_i', 3, 2, true)]
+  assert.equal(deriveXp(stages, 'done'), 60)
+})
+
+test('v3 abandoned still pays passed modules, no completion bonus', () => {
+  const stages = [mod('scale', 1, 1, true), mod('maj7', 2, 1, true), mod('ii_v_i', 3, 2, false)]
+  assert.equal(deriveXp(stages, 'abandoned'), 38)
+})
+
+test('v3 breakdown names each module', () => {
+  const stages = [mod('scale', 1, 1, true), mod('ear', 1, 2, false)]
+  const xp = xpBreakdown(stages, 'abandoned')
+  assert.deepEqual(xp.modules.map((row) => row.xp), [15, 0])
+  assert.equal(xp.complete, 0)
+})

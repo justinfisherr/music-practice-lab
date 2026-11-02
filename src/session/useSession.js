@@ -4,20 +4,18 @@ import { laDate, seedFor, tonightKey } from './tonight.js'
 import { postRun } from './api.js'
 import * as store from './store.js'
 
-const STAGES = [
-  { id: 'warmup', title: 'WARM-UP' },
-  { id: 'ear', title: 'EAR CHECK' },
-  { id: 'hook', title: 'HOOK' },
-]
-
 function newId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return `run-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function makeStages(startedAt) {
-  return STAGES.map((stage, index) => ({
-    id: stage.id,
+// One stage per composed module. The id is the lowercased module type, so the
+// ledger can label a row without carrying the whole module definition.
+function makeStages(startedAt, modules = []) {
+  return modules.map((module, index) => ({
+    id: String(module.type).toLowerCase(),
+    title: module.title,
+    tier: module.tier,
     position: index,
     attempts: 0,
     misses: 0,
@@ -27,11 +25,12 @@ function makeStages(startedAt) {
   }))
 }
 
-export function makeSession(now = Date.now(), plan = null) {
+export function makeSession(now = Date.now(), plan = null, keyIdOverride = null, variant = 'tonight') {
   const date = laDate(new Date(now))
-  const keyId = tonightKey(date)
+  const keyId = keyIdOverride || tonightKey(date)
   const seed = seedFor(date, keyId)
   const startedAt = new Date(now).toISOString()
+  const composition = composeSession({ date, keyId, seed, plan, variant })
   return {
     id: newId(),
     kind: 'graded',
@@ -45,8 +44,8 @@ export function makeSession(now = Date.now(), plan = null) {
     pausedMs: 0,
     currentStage: 0,
     xpBefore: store.loadXp(),
-    stages: makeStages(startedAt),
-    composition: composeSession({ date, keyId, seed, plan }),
+    stages: makeStages(startedAt, composition.modules),
+    composition,
   }
 }
 
@@ -164,8 +163,11 @@ export function toPayload(session) {
     attempts: session.stages.reduce((sum, stage) => sum + stage.attempts, 0),
     misses: session.stages.reduce((sum, stage) => sum + stage.misses, 0),
     passedStages: session.stages.filter((stage) => stage.passed).length,
+    moduleCount: session.stages.length,
     stages: session.stages.map((stage) => ({
       id: stage.id,
+      title: stage.title,
+      tier: stage.tier,
       position: stage.position,
       attempts: stage.attempts,
       misses: stage.misses,
@@ -174,12 +176,16 @@ export function toPayload(session) {
       finishedAt: stage.finishedAt,
     })),
     payload: {
+      version: session.composition?.version ?? 2,
+      moduleCount: session.stages.length,
       source: session.kind === 'manual' ? 'manual' : session.composition?.source || 'local',
       focus: session.focus || null,
       rationale: session.composition?.rationale ?? null,
       composition: session.composition,
       stages: session.stages.map((stage) => ({
         id: stage.id,
+        title: stage.title,
+        tier: stage.tier,
         position: stage.position,
         attempts: stage.attempts,
         misses: stage.misses,
@@ -279,8 +285,8 @@ export function useSession() {
   }, [])
 
   const start = useCallback(
-    (plan = null) => {
-      const next = makeSession(Date.now(), plan)
+    (plan = null, keyId = null, variant = 'tonight') => {
+      const next = makeSession(Date.now(), plan, keyId, variant)
       commit(next)
       return next
     },

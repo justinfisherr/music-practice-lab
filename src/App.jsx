@@ -48,8 +48,8 @@ export default function App() {
     navigate(view === 'session' ? 'session' : view)
   }
 
-  function startSession(plan = null) {
-    practice.start(plan)
+  function startSession(plan = null, keyId = null, variant = 'tonight') {
+    practice.start(plan, keyId, variant)
     navigate('session/run')
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MAJOR_KEYS, keyById } from '../data/scales.js'
+import { MAJOR_KEYS, keyDisplay } from '../data/scales.js'
 import { getRuns } from '../session/api.js'
 import * as store from '../session/store.js'
 import { RankCard } from './Rank.jsx'
@@ -165,7 +165,7 @@ export default function Ledger({
             aria-pressed={filterKey === keyId}
             onClick={() => onFilter(filterKey === keyId ? null : keyId)}
           >
-            {keyById(keyId).label} MAJOR
+            {keyDisplay(keyId)} MAJOR
           </button>
         ))}
       </div>
@@ -192,7 +192,7 @@ export default function Ledger({
             )
           ) : (
             <>
-              NO RUNS IN {keyById(filterKey).label} MAJOR YET.
+              NO RUNS IN {keyDisplay(filterKey)} MAJOR YET.
               <br />
               <button type="button" className="linkbtn" onClick={() => onFilter(null)}>
                 CLEAR FILTER

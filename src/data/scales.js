@@ -43,7 +43,13 @@ export function keyById(id) {
 }
 
 export function keyName(keyId) {
-  return `${keyById(keyId).label} MAJOR`
+  return `${keyDisplay(keyId)} MAJOR`
+}
+
+// v3 displays the sixth fifth as F#: the key id stays 'Gb' for the server and
+// ledger filters, but every surface renders the jazz-friendly spelling.
+export function keyDisplay(id) {
+  return id === 'Gb' ? 'F#' : keyById(id).label
 }
 
 // The seven diatonic triads of a major key, in order I..vii°.
@@ -59,6 +65,7 @@ export function diatonicChords(keyId) {
       keyId: key.id,
       keyLabel: key.label,
       degree: i + 1,
+      rootPc,
       numeral: deg.numeral,
       quality: deg.quality,
       name: `${key.scale[i]}${QUALITY_SUFFIX[deg.quality]}`,

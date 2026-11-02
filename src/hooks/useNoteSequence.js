@@ -3,7 +3,16 @@ import { useMidiContext } from './MidiContext.jsx'
 
 // Subscribe to MIDI while `active`, normalize to pitch class, and report a
 // partial phrase after silence. shortcut: 60ms dedupe for key bounce.
-export function useNoteSequence({ active, onNote, onSilence, silenceMs = 1500, dedupeMs = 60 }) {
+// allowRepeats turns the dedupe off for lines that intentionally repeat a note
+// (guide tones walk a third to the same pitch twice).
+export function useNoteSequence({
+  active,
+  onNote,
+  onSilence,
+  silenceMs = 1500,
+  dedupeMs = 60,
+  allowRepeats = false,
+}) {
   const { subscribe } = useMidiContext()
   const noteRef = useRef(onNote)
   const silenceRef = useRef(onSilence)
@@ -31,7 +40,7 @@ export function useNoteSequence({ active, onNote, onSilence, silenceMs = 1500, d
       if (!activeRef.current) return
       const pc = ((note % 12) + 12) % 12
       const now = Date.now()
-      if (lastRef.current.pc === pc && now - lastRef.current.at < dedupeMs) return
+      if (!allowRepeats && lastRef.current.pc === pc && now - lastRef.current.at < dedupeMs) return
       lastRef.current = { pc, at: now }
       countRef.current += 1
       noteRef.current?.(pc)
@@ -49,5 +58,5 @@ export function useNoteSequence({ active, onNote, onSilence, silenceMs = 1500, d
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = null
     }
-  }, [subscribe, silenceMs, dedupeMs])
+  }, [subscribe, silenceMs, dedupeMs, allowRepeats])
 }

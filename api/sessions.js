@@ -27,7 +27,9 @@ const KEY_IDS = new Set([
   'Bb',
   'F',
 ])
-const STAGE_IDS = new Set(['warmup', 'ear', 'hook'])
+// v3 module ids are lowercased module types; v2 used warmup/ear/hook. One
+// boring pattern covers both and keeps junk out of the ledger.
+const STAGE_ID_RE = /^[a-z0-9_]{1,32}$/
 const MAX_BODY = 32 * 1024
 const MAX_PAYLOAD = 16 * 1024
 const MAX_DURATION = 4 * 60 * 60 * 1000
@@ -88,6 +90,9 @@ export async function ensure() {
       )
       await pool.query(
         'ALTER TABLE practice.sessions ADD COLUMN IF NOT EXISTS xp integer NOT NULL DEFAULT 0',
+      )
+      await pool.query(
+        'ALTER TABLE practice.sessions ADD COLUMN IF NOT EXISTS module_count integer NOT NULL DEFAULT 0',
       )
       await pool.query(`DO $$
         BEGIN
@@ -234,7 +239,8 @@ function validate(input) {
   let stageDuration = 0
   for (const stage of input.stages) {
     if (!stage || typeof stage !== 'object') throw invalid()
-    if (!STAGE_IDS.has(stage.id)) throw invalid()
+    if (typeof stage.id !== 'string' || !STAGE_ID_RE.test(stage.id)) throw invalid()
+    if (stage.tier != null && ![1, 2, 3].includes(stage.tier)) throw invalid()
     if (!intBetween(stage.position, 0, 5)) throw invalid()
     if (!intBetween(stage.attempts, 0, 20)) throw invalid()
     if (!intBetween(stage.misses, 0, 200)) throw invalid()
@@ -260,8 +266,19 @@ function validate(input) {
   const elapsed = end - start
   const rawDuration = stageDuration > 0 ? stageDuration : elapsed
   const durationMs = Math.min(MAX_DURATION, Math.max(0, rawDuration))
+  const moduleCount = Math.max(
+    0,
+    Math.min(
+      6,
+      Number.isInteger(input.moduleCount)
+        ? input.moduleCount
+        : Array.isArray(input.payload?.modules)
+          ? input.payload.modules.length
+          : input.stages.length,
+    ),
+  )
 
-  return { ...input, kind, sessionDate, attempts, misses, passedStages, durationMs }
+  return { ...input, kind, sessionDate, attempts, misses, passedStages, durationMs, moduleCount }
 }
 
 function summary(row) {
@@ -279,6 +296,7 @@ function summary(row) {
     attempts: row.attempts,
     misses: row.misses,
     passedStages: row.passed_stages,
+    moduleCount: row.module_count ?? 0,
     xp: row.xp,
   }
 }
@@ -307,7 +325,7 @@ export default async function handler(req, res) {
         const { rows } = await pool.query(
           `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                   ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
-                  payload->>'focus' AS focus, payload
+                  module_count, payload->>'focus' AS focus, payload
              FROM practice.sessions WHERE id = $1`,
           [String(id)],
         )
@@ -338,7 +356,7 @@ export default async function handler(req, res) {
       const { rows } = await pool.query(
         `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                 ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
-                payload->>'focus' AS focus
+                module_count, payload->>'focus' AS focus
            FROM practice.sessions
           ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
           ORDER BY session_date DESC, started_at DESC
@@ -359,8 +377,8 @@ export default async function handler(req, res) {
       const { rows } = await pool.query(
         `INSERT INTO practice.sessions
           (id, session_date, key_id, seed, status, started_at, ended_at, duration_ms,
-           attempts, misses, passed_stages, xp, payload, client, kind)
-         VALUES ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,'web',$14)
+           attempts, misses, passed_stages, xp, module_count, payload, client, kind)
+         VALUES ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,'web',$15)
          ON CONFLICT (id) DO NOTHING
          RETURNING id`,
         [
@@ -376,6 +394,7 @@ export default async function handler(req, res) {
           input.misses,
           input.passedStages,
           xp,
+          input.moduleCount,
           JSON.stringify(input.payload),
           input.kind,
         ],
@@ -396,6 +415,7 @@ export default async function handler(req, res) {
         kind: input.kind,
         durationMs: input.durationMs,
         xp,
+        moduleCount: input.moduleCount,
         totalXp: await totalXp(pool),
       })
     }
