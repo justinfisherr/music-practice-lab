@@ -1,8 +1,9 @@
 import pg from 'pg'
-import { buildMessages, buildModuleMessages, parseModulePlan, parsePlan } from '../lib/plan.js'
+import { buildModuleMessages, parseModulePlan } from '../lib/plan.js'
 import { validatePlan } from '../lib/modules.js'
 import { seedFor } from '../src/session/tonight.js'
 import { resolvePlan } from '../src/data/modules.js'
+import { diatonicPcs } from '../src/session/phrases.js'
 
 // LLM-composed drill plan. Generation is best-effort: every failure path is a
 // 200 { source: 'standard' }, because a missing plan must never break START.
@@ -80,12 +81,9 @@ function writePlan(res, body) {
   res.statusCode = 200
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.setHeader('Vary', 'Origin')
-  res.setHeader(
-    'Cache-Control',
-    body.source === 'llm'
-      ? 'public, s-maxage=3600, stale-while-revalidate=86400'
-      : 'no-store',
-  )
+  // The in-memory memo is the cache. HTTP caching would outlive a deployment
+  // and serve an old response shape for the same date/key/variant URL.
+  res.setHeader('Cache-Control', 'no-store')
   res.end(JSON.stringify(body))
 }
 
@@ -167,10 +165,24 @@ async function recentRows() {
   }
 }
 
-async function generate({ date, keyId, version = 2, variant = 'tonight' }) {
+function diatonicPlan(resolved, keyId) {
+  const keySet = new Set(diatonicPcs(keyId))
+  for (const module of resolved.modules) {
+    if (module.type === 'PASSING_DIM') continue
+    for (const step of module.steps) {
+      if (!step.targetPcs.every((pc) => keySet.has(pc))) return false
+    }
+  }
+  return true
+}
+
+function fallback(reason) {
+  return { source: 'standard', fallbackReason: reason }
+}
+
+async function generate({ date, keyId, variant }) {
   const key = process.env.OPENROUTER_API_KEY
-  if (!key) return { source: 'standard' }
-  const modulePlan = version === 3
+  if (!key) return fallback('no_api_key')
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
@@ -186,48 +198,62 @@ async function generate({ date, keyId, version = 2, variant = 'tonight' }) {
       body: JSON.stringify({
         model: MODEL,
         temperature: 0.9,
-        max_tokens: modulePlan ? 900 : 220,
-        // The pinned model reasons by default and would spend the whole 220
-        // tokens before emitting JSON; disable reasoning so content arrives.
+        max_tokens: 900,
+        // The pinned model reasons by default and would spend the whole budget
+        // before emitting JSON; disable reasoning so content arrives.
         reasoning: { enabled: false },
-        messages: modulePlan
-          ? buildModuleMessages({ date, keyId, variant, recent })
-          : buildMessages({ date, keyId, recent }),
+        messages: buildModuleMessages({ date, keyId, variant, recent }),
       }),
     })
     if (!res.ok) {
       console.warn('plan', res.status)
-      return { source: 'standard' }
+      return fallback('upstream_status')
     }
     const data = await res.json().catch(() => null)
     const text = data?.choices?.[0]?.message?.content
-    if (modulePlan) {
-      const parsed = parseModulePlan(text)
-      if (!parsed) return { source: 'standard' }
-      const checked = validatePlan(parsed, {
-        recent: recent.map((night) => night.types),
-      })
-      if (!checked.ok) return { source: 'standard' }
-      const resolved = resolvePlan({ plan: checked.value, keyId, seed: seedFor(date, keyId) })
-      if (!resolved) return { source: 'standard' }
-      return {
-        source: 'llm',
-        rationale: resolved.rationale,
-        modules: resolved.modules,
-      }
-    }
-    const parsed = parsePlan(text)
-    if (!parsed) return { source: 'standard' }
+    const parsed = parseModulePlan(text)
+    if (!parsed) return fallback('parse')
+    const checked = validatePlan(parsed, {
+      recent: recent.map((night) => night.types),
+    })
+    if (!checked.ok) return fallback(checked.error)
+    const resolved = resolvePlan({ plan: checked.value, keyId, seed: seedFor(date, keyId) })
+    if (!resolved) return fallback('resolve')
+    if (!diatonicPlan(resolved, keyId)) return fallback('non_diatonic')
     return {
       source: 'llm',
-      rationale: parsed.rationale,
-      plan: { earDegrees: parsed.earDegrees, hookDegrees: parsed.hookDegrees },
+      rationale: resolved.rationale,
+      modules: resolved.modules.map((module) => ({
+        type: module.type,
+        params: module.params ?? null,
+        tier: module.tier,
+        skill: module.skill,
+        grading: module.grading,
+        why: module.why,
+        estSec: module.estSec,
+        title: module.title,
+        teach: module.teach,
+        steps: module.steps,
+      })),
     }
   } catch (error) {
     console.warn('plan', error?.name === 'AbortError' ? 'timeout' : 'error')
-    return { source: 'standard' }
+    return fallback(error?.name === 'AbortError' ? 'timeout' : 'error')
   } finally {
     clearTimeout(timer)
+  }
+}
+
+function standardBody({ date, keyId, variant, reason }) {
+  return {
+    source: 'standard',
+    version: 3,
+    date,
+    keyId,
+    variant,
+    rationale: null,
+    modules: [],
+    fallbackReason: reason,
   }
 }
 
@@ -247,46 +273,63 @@ export default async function handler(req, res) {
 
   const date = String(req.query?.date || '')
   const keyId = String(req.query?.keyId || '')
-  const version = Number(req.query?.version) === 3 ? 3 : 2
   const rawVariant = String(req.query?.variant || 'tonight')
   const variant = rawVariant === 'bonus' ? 'bonus' : rawVariant === 'tonight' ? 'tonight' : null
-  const cacheKey = `${date}|${keyId}|v${version}|${variant || 'invalid'}`
+  const cacheKey = `${date}|${keyId}|${variant || 'invalid'}`
+
+  // The memo stores the generator's raw value; every path wraps it into the v3
+  // envelope so a warm cache can never return the old shape.
+  const respond = (value) => {
+    if (value.source !== 'llm') {
+      return standardBody({
+        date,
+        keyId,
+        variant: variant || rawVariant,
+        reason: value.fallbackReason || 'standard',
+      })
+    }
+    return {
+      source: 'llm',
+      version: 3,
+      date,
+      keyId,
+      variant,
+      rationale: value.rationale || null,
+      modules: value.modules,
+      fallbackReason: null,
+    }
+  }
 
   const cached = memo.get(cacheKey)
   if (cached && Date.now() - cached.at < ttlFor(cached.value)) {
-    return writePlan(res, cached.value)
+    return writePlan(res, respond(cached.value))
   }
 
   const pending = inflight.get(cacheKey)
   if (pending) {
-    return writePlan(res, await pending)
+    return writePlan(res, respond(await pending))
   }
 
   const request = (async () => {
     try {
       // Invalid input, variant, rate limiting, or a missing key is a standard night.
-      if (!validDate(date) || !KEY_IDS.has(keyId) || !variant || rateLimited(req)) {
-        return { source: 'standard' }
-      }
-      const value = await generate({ date, keyId, version, variant })
+      if (!validDate(date)) return fallback('bad_date')
+      if (!KEY_IDS.has(keyId)) return fallback('bad_key')
+      if (!variant) return fallback('bad_variant')
+      if (rateLimited(req)) return fallback('rate_limited')
+      const value = await generate({ date, keyId, variant })
       remember(cacheKey, value)
       return value
     } catch (error) {
       console.warn('plan', error?.name === 'AbortError' ? 'timeout' : 'error')
-      return { source: 'standard' }
+      return fallback('error')
     }
   })()
 
   inflight.set(cacheKey, request)
   const value = await request.finally(() => inflight.delete(cacheKey))
-  if (version === 2) return writePlan(res, value)
-  return writePlan(res, {
-    source: value.source === 'llm' ? 'llm' : 'standard',
-    version: 3,
-    date,
-    keyId,
-    variant: variant || rawVariant,
-    rationale: value.rationale || null,
-    modules: Array.isArray(value.modules) ? value.modules : [],
-  })
+
+  // v3 is always the module envelope, even when generation failed: the client
+  // needs a stable shape.
+  return writePlan(res, respond(value))
 }

@@ -40,6 +40,11 @@ test('gradeSequence counts extra notes', () => {
   assert.equal(result.extraCount, 1)
 })
 
+test('gradeSequence accepts the repeated guide-tone third', () => {
+  const result = gradeSequence([5, 5, 4], [5, 5, 4])
+  assert.equal(result.passed, true)
+})
+
 test('gradeSequence catches wrong order', () => {
   const result = gradeSequence([0, 2, 4], [0, 4, 2])
   assert.equal(result.passed, false)
@@ -88,7 +93,7 @@ test('composeSession returns 3-5 v3 modules, easiest first, no repeats', () => {
   for (let i = 1; i < composed.modules.length; i++) {
     assert.ok(composed.modules[i].tier >= composed.modules[i - 1].tier)
   }
-  assert.ok(composed.modules.every((module) => module.targets.length > 0))
+  assert.ok(composed.modules.every((module) => module.steps.length > 0))
 })
 
 test('composeSession is deterministic for a date, key and variant', () => {

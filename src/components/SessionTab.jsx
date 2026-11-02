@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMidiContext } from '../hooks/MidiContext.jsx'
 import { keyDisplay } from '../data/scales.js'
-import { composeModules } from '../data/modules.js'
-import { nextKey } from '../session/wheel.js'
+import { composeModules, resolveModule } from '../data/modules.js'
 import Wheel from './Wheel.jsx'
+import { loadBonus } from '../session/wheel.js'
 import { daysSinceEpoch, laDate, seedFor, tonightKey } from '../session/tonight.js'
 import { getRuns } from '../session/api.js'
 import { getPlan } from '../session/plan.js'
@@ -22,7 +22,11 @@ function lastSeven(runs) {
   })
 }
 
-function PlanChip({ state, plan, variant }) {
+function moduleMeta(module) {
+  return `T${module.tier} · ${module.grading === 'set' ? 'SET' : 'ORDERED'} · ${module.estSec}S`
+}
+
+function PlanChip({ state, plan, count, variant }) {
   const label = variant === 'bonus' ? 'BONUS' : 'TONIGHT'
   if (state === 'composing') {
     return <p className="planchip planchip--waiting">{label} · COMPOSING…</p>
@@ -30,12 +34,15 @@ function PlanChip({ state, plan, variant }) {
   if (state === 'composed' && plan?.source === 'llm') {
     return (
       <p className="planchip planchip--ready">
-        {label} · COMPOSED
-        {plan.rationale ? <span className="planchip__why">{plan.rationale}</span> : null}
+        {label} · COMPOSED·{count}
       </p>
     )
   }
-  return <p className="planchip">{label} · STANDARD</p>
+  return (
+    <p className="planchip">
+      {label} · STANDARD·{count}
+    </p>
+  )
 }
 
 export default function SessionTab({
@@ -51,9 +58,12 @@ export default function SessionTab({
   const midi = useMidiContext()
   const date = laDate()
   const tonight = tonightKey(date)
-  const [selectedKey, setSelectedKey] = useState(tonight)
   const [variant, setVariant] = useState('tonight')
-  const keyId = variant === 'bonus' ? nextKey(tonight) : selectedKey
+  const [bonusKey, setBonusKey] = useState(() => {
+    const stored = loadBonus(date)
+    return stored && stored !== tonight ? stored : null
+  })
+  const keyId = variant === 'bonus' && bonusKey ? bonusKey : tonight
   const seed = seedFor(date, keyId)
   const [runs, setRuns] = useState(() => store.loadCachedRuns())
   const [plan, setPlan] = useState(null)
@@ -81,8 +91,12 @@ export default function SessionTab({
     }
   }, [onTotalXp])
 
+  // The local fallback list renders immediately; the plan chip upgrades in
+  // place if the LLM answers. Once START fires, late plans are ignored.
   useEffect(() => {
     let live = true
+    setPlan(null)
+    setPlanState('composing')
     getPlan({ date, keyId, variant })
       .then((result) => {
         if (!live || startedRef.current) return
@@ -97,17 +111,32 @@ export default function SessionTab({
     }
   }, [date, keyId, variant])
 
-  const previewModules = plan?.modules?.length
-    ? plan.modules
-    : composeModules({ seed, keyId, variant })
+  const localModules = composeModules({ seed, keyId, variant })
+  const plannedModules =
+    plan?.source === 'llm' && Array.isArray(plan.modules)
+      ? plan.modules
+          .map((module) => resolveModule({ type: module.type, params: module.params, keyId, seed }))
+          .filter(Boolean)
+      : []
+  const previewModules = plannedModules.length ? plannedModules : localModules
+
   const week = lastSeven(runs)
   const minutes = Math.round(week.reduce((sum, run) => sum + (run.durationMs || 0), 0) / 60000)
-  const stages = week.length * 3
+  const modules = week.reduce(
+    (sum, run) => sum + (run.kind === 'manual' ? 0 : run.moduleCount || 3),
+    0,
+  )
   const passed = week.reduce((sum, run) => sum + (run.passedStages || 0), 0)
-  const passRate = stages ? Math.round((passed / stages) * 100) : 0
+  const passRate = modules ? Math.round((passed / modules) * 100) : 0
 
   const manualActive = session?.kind === 'manual' && session.status === 'active'
   const sessionActive = session?.status === 'active'
+
+  function startSession(planOverride = null, keyOverride = keyId, variantOverride = variant) {
+    unlockAudio()
+    startedRef.current = true
+    onStart(planOverride, keyOverride, variantOverride)
+  }
 
   let action
   if (manualActive || !midi.supported) {
@@ -141,13 +170,9 @@ export default function SessionTab({
       <button
         type="button"
         className="btn btn--huge btn--signal"
-        onClick={() => {
-          unlockAudio()
-          startedRef.current = true
-          onStart(plan?.source === 'llm' ? plan : null, keyId, variant)
-        }}
+        onClick={() => startSession(plan?.source === 'llm' ? plan : null)}
       >
-        START TONIGHT
+        START {variant === 'bonus' ? 'BONUS' : 'TONIGHT'}
       </button>
     )
   }
@@ -164,35 +189,12 @@ export default function SessionTab({
           {seed}
         </p>
         <RankLine rank={rank} />
-        <div className="variantchips" role="group" aria-label="Session variant">
-          <button
-            type="button"
-            className={`chipbtn${variant === 'tonight' ? ' is-active' : ''}`}
-            aria-pressed={variant === 'tonight'}
-            onClick={() => {
-              if (sessionActive) return
-              setVariant('tonight')
-              setSelectedKey(tonight)
-              setPlanState('composing')
-            }}
-          >
-            TONIGHT
-          </button>
-          <button
-            type="button"
-            className={`chipbtn${variant === 'bonus' ? ' is-active' : ''}`}
-            aria-pressed={variant === 'bonus'}
-            onClick={() => {
-              if (sessionActive) return
-              setVariant('bonus')
-              setSelectedKey(nextKey(tonight))
-              setPlanState('composing')
-            }}
-          >
-            BONUS
-          </button>
-        </div>
-        <PlanChip state={planState} plan={plan} variant={variant} />
+        <PlanChip
+          state={planState}
+          plan={plan}
+          count={previewModules.length}
+          variant={variant}
+        />
         <div className="tonight__actions">
           {action}
           {session?.status && session.status !== 'active' ? (
@@ -273,32 +275,46 @@ export default function SessionTab({
       <div className="desk">
         <aside className="desk__wheel">
           <Wheel
-            keyId={keyId}
-            bonusKey={nextKey(keyId)}
+            date={date}
+            tonightKey={tonight}
+            activeKey={keyId}
+            bonusKey={bonusKey}
+            variant={variant}
             disabled={sessionActive}
-            onSelect={(id) => {
-              if (sessionActive) return
-              setVariant('tonight')
-              setSelectedKey(id)
-              setPlanState('composing')
+            onBonus={(key) => {
+              setBonusKey(key)
+              if (variant !== 'bonus') setVariant('bonus')
             }}
+            onTonight={() => setVariant('tonight')}
+            onStartBonus={(key) =>
+              startSession(
+                variant === 'bonus' && plan?.source === 'llm' ? plan : null,
+                key,
+                'bonus',
+              )
+            }
           />
         </aside>
         <div className="desk__main">
           <ol className="stagepreview" aria-label="Session modules">
-        {previewModules.map((module, index) => (
-          <li className="stagepreview__row" key={`${module.type}-${index}`}>
-            <span className="stagepreview__num">{String(index + 1).padStart(2, '0')}</span>
-            <span>
-              <span className="stagepreview__title">{module.title}</span>
-              <span className="stagepreview__copy">{module.teach}</span>
-            </span>
-            <span className="stagepreview__tag">
-              T{module.tier} · {module.estSec}S
-            </span>
-          </li>
+            {previewModules.map((module, index) => (
+              <li className="stagepreview__row" key={`${module.type}-${index}`}>
+                <span className="stagepreview__num">{String(index + 1).padStart(2, '0')}</span>
+                <span>
+                  <span className="stagepreview__type">{module.type}</span>
+                  <span className="stagepreview__title">{module.title}</span>
+                  <span className="stagepreview__copy">{module.teach}</span>
+                </span>
+                <span className="stagepreview__tag">{moduleMeta(module)}</span>
+              </li>
             ))}
           </ol>
+          {plan?.source === 'llm' && plan.rationale ? (
+            <div className="whymodules">
+              <span className="whymodules__label">WHY THESE MODULES</span>
+              <p className="whymodules__copy">{plan.rationale}</p>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -313,7 +329,7 @@ export default function SessionTab({
         </div>
         <div className="strip__cell">
           <span className="strip__value">{passRate}%</span>
-          <span className="strip__label">STAGES PASSED</span>
+          <span className="strip__label">MODULES PASSED</span>
         </div>
       </div>
 

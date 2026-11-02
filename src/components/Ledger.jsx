@@ -65,8 +65,9 @@ export default function Ledger({
   const presentKeys = MAJOR_KEYS.filter((key) => counts.has(key.id)).map((key) => key.id)
 
   const minutes = Math.round(filtered.reduce((sum, run) => sum + (run.durationMs || 0), 0) / 60000)
-  const stageTotal = filtered.filter((run) => run.kind !== 'manual').length * 3
-  const passed = filtered.reduce((sum, run) => sum + (run.passedStages || 0), 0)
+  const graded = filtered.filter((run) => run.kind !== 'manual')
+  const stageTotal = graded.reduce((sum, run) => sum + (run.moduleCount || 3), 0)
+  const passed = graded.reduce((sum, run) => sum + (run.passedStages || 0), 0)
   const misses = filtered.reduce((sum, run) => sum + (run.misses || 0), 0)
   const passRate = stageTotal ? Math.round((passed / stageTotal) * 100) : 0
 
@@ -112,7 +113,7 @@ export default function Ledger({
         </div>
         <div className="meter">
           <span className="meter__value">{passRate}%</span>
-          <span className="meter__label">STAGES PASSED</span>
+          <span className="meter__label">MODULES PASSED · {stageTotal}</span>
           <div className="meter__bar">
             <div className="meter__fill" style={{ width: `${passRate}%` }} />
           </div>
@@ -138,10 +139,10 @@ export default function Ledger({
               key={key.id}
               disabled={!count}
               aria-pressed={selected}
-              aria-label={`${key.id} major, ${count} session${count === 1 ? '' : 's'}`}
+              aria-label={`${keyDisplay(key.id)} major, ${count} session${count === 1 ? '' : 's'}`}
               onClick={() => onFilter(selected ? null : key.id)}
             >
-              <span className="heatcell__key">{key.id}</span>
+              <span className="heatcell__key">{keyDisplay(key.id)}</span>
               <span className="heatcell__count">{count} RUN{count === 1 ? '' : 'S'}</span>
             </button>
           )
@@ -209,11 +210,13 @@ export default function Ledger({
                 <span className="runrow__date">
                   {run.date} · {clock(run.durationMs)}
                 </span>
-                <span className="runrow__key">{manual ? run.focus || 'OPEN' : run.keyId}</span>
+                <span className="runrow__key">{manual ? run.focus || 'OPEN' : keyDisplay(run.keyId)}</span>
                 <span className="runrow__stats">
                   {manual
                     ? 'OPEN SESSION'
-                    : `${run.attempts} ATTEMPTS · ${run.misses} MISSES · ${run.passedStages}/3 STAGES`}
+                    : `${run.attempts} ATTEMPTS · ${run.misses} MISSES · ${run.passedStages}/${run.moduleCount || 3} MODULES${
+                        run.moduleTypes?.length ? ` · ${run.moduleTypes.join(' ')}` : ''
+                      }`}
                 </span>
                 <span className={`runrow__status${run.status === 'abandoned' ? ' is-abandoned' : ''}`}>
                   {manual ? 'DONE' : run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}

@@ -7,7 +7,7 @@ import { validatePlan } from '../../lib/modules.js'
 export const PLAN_ENDPOINT =
   import.meta.env.VITE_PLAN_ENDPOINT || 'https://music-practice-lab.vercel.app/api/plan'
 
-const TIMEOUT = 1600
+const TIMEOUT = 6000
 const POSITIVE_TTL = 6 * 60 * 60 * 1000
 const NEGATIVE_TTL = 15 * 60 * 1000
 const CAP = 20
@@ -38,6 +38,7 @@ function accept(body, version) {
   if (!body || (body.source !== 'llm' && body.source !== 'standard')) return null
   if (body.source !== 'llm') return body
   if (version === 3) {
+    if (body.version !== 3) return null
     if (!Array.isArray(body.modules)) return null
     if (body.source === 'llm' && !validatePlan({ rationale: body.rationale, modules: body.modules }).ok) {
       return null

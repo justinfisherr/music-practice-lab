@@ -62,7 +62,8 @@ export default function SessionSummary({ session, syncState, onDone, onAgain, on
   const stages = session.stages || []
   const totalAttempts = stages.reduce((sum, stage) => sum + stage.attempts, 0)
   const totalMisses = stages.reduce((sum, stage) => sum + stage.misses, 0)
-  const xp = xpBreakdown(stages, session.status)
+  const scope = session.scope || (session.kind === 'manual' ? 'open' : 'session')
+  const xp = xpBreakdown(stages, session.status, scope)
 
   return (
     <section className="summary" aria-labelledby="summary-title">
@@ -116,7 +117,7 @@ export default function SessionSummary({ session, syncState, onDone, onAgain, on
       <table className="summarytable">
         <thead>
           <tr>
-            <th scope="col">STAGE</th>
+            <th scope="col">{v3 ? 'MODULE' : 'STAGE'}</th>
             <th scope="col">ATTEMPTS</th>
             <th scope="col">MISSES</th>
             <th scope="col">RESULT</th>

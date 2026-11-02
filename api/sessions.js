@@ -1,5 +1,6 @@
 import pg from 'pg'
 import { deriveXp } from '../lib/xp.js'
+import { MODULE_IDS } from '../lib/modules.js'
 
 // Public, no-account session log. Auth is intentionally absent; the write
 // surface is protected by a CORS allowlist, strict shape validation, a 32KB
@@ -27,9 +28,11 @@ const KEY_IDS = new Set([
   'Bb',
   'F',
 ])
-// v3 module ids are lowercased module types; v2 used warmup/ear/hook. One
-// boring pattern covers both and keeps junk out of the ledger.
-const STAGE_ID_RE = /^[a-z0-9_]{1,32}$/
+// v3 module ids are lowercased module types; v2 used warmup/ear/hook. The
+// allowlist is the contract with the client composer, not a regex.
+const MODULE_ID_SET = new Set(MODULE_IDS)
+const STAGE_IDS = new Set(['warmup', 'ear', 'hook', ...MODULE_IDS])
+const SCOPES = new Set(['session', 'lesson', 'open'])
 const MAX_BODY = 32 * 1024
 const MAX_PAYLOAD = 16 * 1024
 const MAX_DURATION = 4 * 60 * 60 * 1000
@@ -235,12 +238,17 @@ function validate(input) {
   if (start > end || end - start > 24 * 60 * 60 * 1000) throw invalid()
   if (!Array.isArray(input.stages) || input.stages.length > 6) throw invalid()
   const sessionDate = dayFmt.format(new Date(start))
+  const v3 =
+    input.payload?.version === 3 ||
+    input.payload?.composition?.version === 3 ||
+    input.stages.some((stage) => stage?.id !== 'ear' && MODULE_ID_SET.has(stage?.id))
 
   let stageDuration = 0
   for (const stage of input.stages) {
     if (!stage || typeof stage !== 'object') throw invalid()
-    if (typeof stage.id !== 'string' || !STAGE_ID_RE.test(stage.id)) throw invalid()
+    if (typeof stage.id !== 'string' || !STAGE_IDS.has(stage.id)) throw invalid()
     if (stage.tier != null && ![1, 2, 3].includes(stage.tier)) throw invalid()
+    if (v3 && MODULE_ID_SET.has(stage.id) && !intBetween(stage.tier, 1, 3)) throw invalid()
     if (!intBetween(stage.position, 0, 5)) throw invalid()
     if (!intBetween(stage.attempts, 0, 20)) throw invalid()
     if (!intBetween(stage.misses, 0, 200)) throw invalid()
@@ -258,6 +266,8 @@ function validate(input) {
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) {
     throw invalid()
   }
+  const scope = input.payload.scope ?? (kind === 'manual' ? 'open' : 'session')
+  if (!SCOPES.has(scope)) throw invalid()
   if (Buffer.byteLength(JSON.stringify(input.payload)) > MAX_PAYLOAD) throw tooLarge()
 
   const attempts = input.stages.reduce((sum, stage) => sum + stage.attempts, 0)
@@ -266,19 +276,34 @@ function validate(input) {
   const elapsed = end - start
   const rawDuration = stageDuration > 0 ? stageDuration : elapsed
   const durationMs = Math.min(MAX_DURATION, Math.max(0, rawDuration))
+  const plannedModules = Array.isArray(input.payload?.composition?.modules)
+    ? input.payload.composition.modules
+    : Array.isArray(input.payload?.modules)
+      ? input.payload.modules
+      : []
   const moduleCount = Math.max(
     0,
     Math.min(
-      6,
+      5,
       Number.isInteger(input.moduleCount)
         ? input.moduleCount
-        : Array.isArray(input.payload?.modules)
-          ? input.payload.modules.length
-          : input.stages.length,
+        : plannedModules.length || input.stages.length,
     ),
   )
+  const moduleTypes = plannedModules.map((module) => module?.type).filter((type) => typeof type === 'string')
 
-  return { ...input, kind, sessionDate, attempts, misses, passedStages, durationMs, moduleCount }
+  return {
+    ...input,
+    kind,
+    scope,
+    sessionDate,
+    attempts,
+    misses,
+    passedStages,
+    durationMs,
+    moduleCount,
+    moduleTypes,
+  }
 }
 
 function summary(row) {
@@ -297,6 +322,9 @@ function summary(row) {
     misses: row.misses,
     passedStages: row.passed_stages,
     moduleCount: row.module_count ?? 0,
+    moduleTypes: Array.isArray(row.module_types)
+      ? row.module_types.map((module) => module?.type).filter((type) => typeof type === 'string')
+      : [],
     xp: row.xp,
   }
 }
@@ -325,7 +353,8 @@ export default async function handler(req, res) {
         const { rows } = await pool.query(
           `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                   ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
-                  module_count, payload->>'focus' AS focus, payload
+                  module_count, payload->>'focus' AS focus,
+                  payload#>'{composition,modules}' AS module_types, payload
              FROM practice.sessions WHERE id = $1`,
           [String(id)],
         )
@@ -356,7 +385,8 @@ export default async function handler(req, res) {
       const { rows } = await pool.query(
         `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                 ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
-                module_count, payload->>'focus' AS focus
+                module_count, payload->>'focus' AS focus,
+                payload#>'{composition,modules}' AS module_types
            FROM practice.sessions
           ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
           ORDER BY session_date DESC, started_at DESC
@@ -373,7 +403,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       if (rateLimited(req)) return write(res, 429, { error: 'rate_limited' })
       const input = validate(await body(req))
-      const xp = deriveXp(input.stages, input.status, input.kind)
+      const xp = deriveXp(input.stages, input.status, input.kind, input.scope)
       const { rows } = await pool.query(
         `INSERT INTO practice.sessions
           (id, session_date, key_id, seed, status, started_at, ended_at, duration_ms,

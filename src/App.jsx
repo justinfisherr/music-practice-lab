@@ -141,7 +141,7 @@ export default function App() {
       <div className="app">
         <header className="masthead">
           <h1 className="masthead__title">BRUTALIST MUSIC LAB</h1>
-          <p className="masthead__sub">PRACTICE MACHINE · v2</p>
+          <p className="masthead__sub">PRACTICE MACHINE · v3</p>
         </header>
         <Navigation routes={ROUTES} view={route.view} onChange={changeView} />
         {practice.session?.kind === 'manual' && practice.session.status === 'active' ? (

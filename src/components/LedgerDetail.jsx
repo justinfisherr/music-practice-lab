@@ -55,11 +55,14 @@ export default function LedgerDetail({ id, onBack }) {
 
   const manual = run.kind === 'manual'
   const payload = run.payload || {}
+  const v3 = payload.version === 3 || payload.composition?.version === 3
   const stages = run.stages || payload.stages || []
-  const hook = payload.composition?.stages?.find((stage) => stage.id === 'hook')
+  const modules = payload.composition?.modules || []
+  const hook = v3 ? null : payload.composition?.stages?.find((stage) => stage.id === 'hook')
   const attempts = run.attempts ?? stages.reduce((sum, stage) => sum + (stage.attempts || 0), 0)
   const misses = run.misses ?? stages.reduce((sum, stage) => sum + (stage.misses || 0), 0)
   const passed = run.passedStages ?? stages.filter((stage) => stage.passed).length
+  const moduleCount = run.moduleCount ?? payload.moduleCount ?? (v3 ? stages.length : 3)
 
   return (
     <section className="detail" aria-labelledby="detail-title">
@@ -78,8 +81,8 @@ export default function LedgerDetail({ id, onBack }) {
         </h2>
         <p className="detail__meta">
           {manual
-            ? `${clock(run.durationMs)} · ${run.focus || 'OPEN SESSION'} · +0 XP`
-            : `${clock(run.durationMs)} · ${attempts} ATTEMPTS · ${misses} MISSES · ${passed}/3 STAGES · +${run.xp ?? 0} XP`}
+            ? `${clock(run.durationMs)} · ${payload.scope || 'open'} · +0 XP`
+            : `${clock(run.durationMs)} · ${attempts} ATTEMPTS · ${misses} MISSES · ${passed}/${moduleCount} MODULES · +${run.xp ?? 0} XP`}
         </p>
       </div>
 
@@ -89,31 +92,52 @@ export default function LedgerDetail({ id, onBack }) {
         <div className="emptyblock">
           OPEN SESSION · {run.focus || 'FREE PLAY'} · {clock(run.durationMs)}
         </div>
-      ) : stages.length ? (
-        <table className="summarytable">
-          <thead>
-            <tr>
-              <th scope="col">STAGE</th>
-              <th scope="col">ATTEMPTS</th>
-              <th scope="col">MISSES</th>
-              <th scope="col">RESULT</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stages.map((stage) => (
-              <tr key={stage.id}>
-                <td>{STAGE_LABELS[stage.id] || stage.id}</td>
-                <td>{stage.attempts ?? 0}</td>
-                <td>{stage.misses ?? 0}</td>
-                <td className={stage.passed ? 'is-pass' : 'is-fail'}>
-                  {stage.passed ? 'PASS' : 'OPEN'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       ) : (
-        <div className="emptyblock">STAGE DETAIL WAS NOT STORED FOR THIS RUN.</div>
+        <>
+          {v3 && modules.length ? (
+            <ol className="stagepreview" aria-label="Session modules">
+              {modules.map((module, index) => (
+                <li className="stagepreview__row" key={`${module.type}-${index}`}>
+                  <span className="stagepreview__num">{String(index + 1).padStart(2, '0')}</span>
+                  <span>
+                    <span className="stagepreview__type">{module.type}</span>
+                    <span className="stagepreview__title">{module.title}</span>
+                    <span className="stagepreview__copy">{module.teach}</span>
+                  </span>
+                  <span className="stagepreview__tag">
+                    T{module.tier} · {module.grading === 'set' ? 'SET' : 'ORDERED'} · {module.estSec}S
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+          {stages.length ? (
+            <table className="summarytable">
+              <thead>
+                <tr>
+                  <th scope="col">{v3 ? 'MODULE' : 'STAGE'}</th>
+                  <th scope="col">ATTEMPTS</th>
+                  <th scope="col">MISSES</th>
+                  <th scope="col">RESULT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stages.map((stage) => (
+                  <tr key={`${stage.id}-${stage.position ?? 0}`}>
+                    <td>{stage.title || STAGE_LABELS[stage.id] || stage.id}</td>
+                    <td>{stage.attempts ?? 0}</td>
+                    <td>{stage.misses ?? 0}</td>
+                    <td className={stage.passed ? 'is-pass' : 'is-fail'}>
+                      {stage.passed ? 'PASS' : 'OPEN'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="emptyblock">STAGE DETAIL WAS NOT STORED FOR THIS RUN.</div>
+          )}
+        </>
       )}
 
       {hook ? (

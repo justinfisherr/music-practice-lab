@@ -77,10 +77,11 @@ test('parses a clean v3 module plan', () => {
   assert.deepEqual(plan.modules.map((module) => module.type), ['SCALE', 'EAR', 'II_V_I'])
 })
 
-test('rejects a v3 plan with uppercase or shouting rationale', () => {
+test('v3 rationale is only capped by length, not voice', () => {
   const modules = [{ type: 'SCALE' }, { type: 'EAR' }, { type: 'II_V_I' }]
-  assert.equal(parseModulePlan(JSON.stringify({ rationale: 'A Plan', modules })), null)
-  assert.equal(parseModulePlan(JSON.stringify({ rationale: 'a plan!', modules })), null)
+  assert.ok(parseModulePlan(JSON.stringify({ rationale: 'A Plan', modules })))
+  assert.ok(parseModulePlan(JSON.stringify({ rationale: 'a plan!', modules })))
+  assert.equal(parseModulePlan(JSON.stringify({ rationale: 'x'.repeat(201), modules })), null)
 })
 
 test('rejects a v3 plan that breaks the module constraints', () => {

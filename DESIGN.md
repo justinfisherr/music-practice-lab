@@ -76,7 +76,7 @@ The LEDGER is a paper surface with four block meters, a 12-cell key heat grid in
 
 ## Rank & XP
 
-Each finished session earns XP on the server (`practice.sessions.xp`): warm-up 10 (+5 first try), ear 20 (+10), hook 35 (+15), plus 15 for finishing. The first occurrence of each stage counts, only passed stages count, and the total clamps to 1000 per session. `meta.totalXp` is the global sum across every session, and it is the single number the client trusts.
+Each finished session earns XP on the server (`practice.sessions.xp`): warm-up 10 (+5 first try), ear 20 (+10), hook 35 (+15), plus 15 for finishing. v3 modules pay tier 1/2/3 = 10/15/20, plus 5 for a first-try clear, plus 15 completion XP on session-scope runs. The first occurrence of each stage counts, only passed stages count, and the total clamps to 1000 per session. `meta.totalXp` is the global sum across every session, and it is the single number the client trusts.
 
 The rank ladder is `L1 0 · L2 120 · L3 300 · L4 560 · L5 900 · L6 1320 · L7 1840 · L8 2460 · L9 3180 · L10 4000`, with titles OPENING ACT (L1-2), SIDE PLAYER (L3-4), SESSION PLAYER (L5-6), HEADLINER (L7-8), BANDLEADER (L9-10). `RankLine` sits inside the ink TONIGHT block; `XpBand` is a hard-ruled floor-to-next bar with tabular numbers; `RankCard` heads the Ledger; `LevelUpBlock` appears on the summary only when the session crossed a level.
 

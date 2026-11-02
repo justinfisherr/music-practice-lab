@@ -4,7 +4,6 @@ import { gradeSequence, gradeSet } from '../session/grade.js'
 import { playPhrase, unlockAudio } from '../session/audio.js'
 import { noteName } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
-import { GRADING } from '../../lib/modules.js'
 
 const SET_GAP = 0.12
 const SEQ_GAP = 0.5
@@ -20,10 +19,11 @@ export default function ModuleStage({
   onFinished,
   disabled,
 }) {
-  const setMode = module.grading === GRADING.SET
-  const targets = module.targets || []
+  const steps = module.steps || []
+  const hasSetStep = steps.some((step) => step.kind === 'set')
+  const hasSequenceStep = steps.some((step) => step.kind === 'sequence')
   const [phase, setPhase] = useState('teach')
-  const [targetIndex, setTargetIndex] = useState(0)
+  const [stepIndex, setStepIndex] = useState(0)
   const [played, setPlayed] = useState([])
   const [result, setResult] = useState(null)
   const [fails, setFails] = useState(0)
@@ -31,8 +31,6 @@ export default function ModuleStage({
   const playedRef = useRef([])
   const timersRef = useRef([])
   const gradingRef = useRef(false)
-  const disabledRef = useRef(disabled)
-  disabledRef.current = disabled
   const stageId = String(module.type).toLowerCase()
 
   useEffect(
@@ -54,13 +52,16 @@ export default function ModuleStage({
   }
 
   function hearEvents() {
-    if (!setMode) return { events: targets[0].pcs, gap: SEQ_GAP }
-    const events = []
-    targets.forEach((target, index) => {
-      if (index > 0) events.push(null)
-      events.push(...target.pcs)
-    })
-    return { events, gap: SET_GAP }
+    if (steps.length > 1) {
+      const events = []
+      steps.forEach((step, index) => {
+        if (index > 0) events.push(null)
+        events.push(...step.targetPcs)
+      })
+      return { events, gap: hasSequenceStep ? SEQ_GAP : SET_GAP }
+    }
+    const step = steps[0]
+    return { events: step?.targetPcs || [], gap: step?.kind === 'set' ? SET_GAP : SEQ_GAP }
   }
 
   function hear() {
@@ -68,7 +69,7 @@ export default function ModuleStage({
     unlockAudio()
     setNotes([])
     setResult(null)
-    setTargetIndex(0)
+    setStepIndex(0)
     setCompleted(false)
     setPhase('hear')
     const { events, gap } = hearEvents()
@@ -80,10 +81,11 @@ export default function ModuleStage({
     )
   }
 
-  function replayTarget(index) {
-    const target = targets[index]
-    playPhrase(target.pcs, { gap: setMode ? SET_GAP : SEQ_GAP })
-    return target.pcs.length * (setMode ? SET_GAP : SEQ_GAP) * 1000 + 350
+  function replayStep(index) {
+    const step = steps[index]
+    const gap = step.kind === 'set' ? SET_GAP : SEQ_GAP
+    playPhrase(step.targetPcs, { gap })
+    return step.targetPcs.length * gap * 1000 + 350
   }
 
   function finishModule(passed) {
@@ -91,28 +93,37 @@ export default function ModuleStage({
     if (passed) setCompleted(true)
   }
 
-  function moveOn() {
-    clearTimers()
-    advanceStage(false)
+  function endModule(passed) {
+    advanceStage(passed)
     if (position + 1 >= total) {
       finish()
       onFinished()
     }
   }
 
+  function moveOn() {
+    clearTimers()
+    endModule(false)
+  }
+
   function grade(notes) {
     if (gradingRef.current) return
-    const target = targets[targetIndex]
+    const step = steps[stepIndex]
+    if (!step) return
     gradingRef.current = true
-    const diff = setMode ? gradeSet(target.pcs, notes) : gradeSequence(target.pcs, notes)
+    const diff =
+      step.kind === 'set'
+        ? gradeSet(step.targetPcs, notes)
+        : gradeSequence(step.targetPcs, notes)
     setResult(diff)
     setPlayed(notes)
+
     if (diff.passed) {
-      if (setMode && targetIndex + 1 < targets.length) {
-        // Chord cleared; move to the next chord without leaving PLAY.
+      if (stepIndex + 1 < steps.length) {
+        // Step cleared; move to the next step without leaving PLAY.
         timersRef.current.push(
           setTimeout(() => {
-            setTargetIndex((value) => value + 1)
+            setStepIndex((value) => value + 1)
             setNotes([])
             setResult(null)
             setPhase('play')
@@ -126,12 +137,13 @@ export default function ModuleStage({
       gradingRef.current = false
       return
     }
+
     recordAttempt(stageId, true)
     setFails((value) => value + 1)
-    // Miss: replay the target once, then automatically re-arm the same attempt.
+    // Miss: replay the current step once, then automatically re-arm it.
     timersRef.current.push(
       setTimeout(() => {
-        const wait = replayTarget(targetIndex)
+        const wait = replayStep(stepIndex)
         timersRef.current.push(
           setTimeout(() => {
             setNotes([])
@@ -146,11 +158,11 @@ export default function ModuleStage({
 
   function handleNote(pc) {
     if (disabled || phase !== 'play' || result) return
-    const target = targets[targetIndex]
-    if (!target) return
+    const step = steps[stepIndex]
+    if (!step) return
     const next = [...playedRef.current, pc]
     setNotes(next)
-    if (next.length >= target.pcs.length) grade(next)
+    if (next.length >= step.targetPcs.length) grade(next)
   }
 
   function handleSilence() {
@@ -162,19 +174,18 @@ export default function ModuleStage({
     active: phase === 'play' && !disabled,
     onNote: handleNote,
     onSilence: handleSilence,
-    allowRepeats: module.grading === GRADING.SEQUENCE,
+    allowRepeats: hasSequenceStep,
   })
 
   function nextModule() {
-    advanceStage(true)
-    if (position + 1 >= total) {
-      finish()
-      onFinished()
-    }
+    endModule(true)
   }
 
-  const target = targets[targetIndex]
-  const totalNotes = setMode ? targets.reduce((sum, item) => sum + item.pcs.length, 0) : target?.pcs.length || 0
+  const step = steps[stepIndex]
+  const stepIsSet = step?.kind === 'set'
+  const totalNotes = stepIsSet
+    ? steps.reduce((sum, item) => sum + item.targetPcs.length, 0)
+    : step?.targetPcs.length || 0
 
   return (
     <div className="stagecard modulestage">
@@ -190,6 +201,20 @@ export default function ModuleStage({
         <span className="modulewhy__label">WHY</span>
         <span>{module.why}</span>
         <span className="modulewhy__est">{module.estSec}S</span>
+      </div>
+
+      <div className="moduleprogress" aria-label="Module progress">
+        {steps.map((item, index) => (
+          <span
+            className={`moduleprogress__tick${
+              index < stepIndex || completed ? ' is-passed' : index === stepIndex ? ' is-active' : ''
+            }`}
+            key={`${item.label}-${index}`}
+          />
+        ))}
+        <span className="moduleprogress__label">
+          {completed ? 'CLEAR' : `STEP ${Math.min(stepIndex + 1, steps.length)} OF ${steps.length}`}
+        </span>
       </div>
 
       {phase === 'teach' ? (
@@ -214,19 +239,21 @@ export default function ModuleStage({
         </>
       ) : null}
 
-      {setMode && targets.length ? (
-        <ul className="triadlist module-targets" aria-label={`${module.title} targets`}>
-          {targets.map((item, index) => {
+      {hasSetStep && steps.length ? (
+        <ul className="triadlist module-targets" aria-label={`${module.title} steps`}>
+          {steps.map((item, index) => {
             const state =
-              index < targetIndex ? 'is-passed' : index === targetIndex ? 'is-active' : ''
+              index < stepIndex || completed ? 'is-passed' : index === stepIndex ? 'is-active' : ''
             return (
               <li className={`triad ${state}`} key={`${item.label}-${index}`}>
-                <span className="triad__numeral">{item.numeral || String(index + 1).padStart(2, '0')}</span>
+                <span className="triad__numeral">
+                  {item.label.split(' · ')[0] || String(index + 1).padStart(2, '0')}
+                </span>
                 <span className="triad__name">
-                  {item.label} <span className="hintline">{item.pcs.map(noteName).join(' ')}</span>
+                  {item.label} <span className="hintline">{item.targetNotes.join(' ')}</span>
                 </span>
                 <span className="triad__status">
-                  {index < targetIndex ? 'PLAYED' : index === targetIndex ? 'NOW' : ''}
+                  {index < stepIndex || completed ? 'PLAYED' : index === stepIndex ? 'NOW' : ''}
                 </span>
               </li>
             )
@@ -236,18 +263,18 @@ export default function ModuleStage({
 
       {phase === 'play' ? (
         <>
-          {setMode ? (
+          {stepIsSet ? (
             <div className="chordprompt">
               <span className="chordprompt__label">PLAY THE CHORD</span>
-              <span className="chordprompt__name">{target?.label}</span>
+              <span className="chordprompt__name">{step?.label}</span>
               <span className="chordprompt__sub">
-                {target?.pcs.map(noteName).join(' ')} · {targetIndex + 1} OF {targets.length}
+                {step?.targetNotes.join(' ')} · {stepIndex + 1} OF {steps.length}
               </span>
             </div>
           ) : (
             <div className="chordprompt">
               <span className="chordprompt__label">PLAY THE LINE</span>
-              <span className="chordprompt__name">{target?.label}</span>
+              <span className="chordprompt__name">{step?.label}</span>
               <span className="chordprompt__sub">
                 {played.length} OF {totalNotes} NOTES HEARD
               </span>
@@ -260,7 +287,7 @@ export default function ModuleStage({
             </p>
           ) : (
             <p className="hintline">
-              {setMode ? 'LISTENING FOR THE CHORD…' : 'LISTENING FOR THE LINE…'}
+              {stepIsSet ? 'LISTENING FOR THE CHORD…' : 'LISTENING FOR THE LINE…'}
             </p>
           )}
 
@@ -284,9 +311,9 @@ export default function ModuleStage({
               : `MOVED ON — ${fails} MISS${fails === 1 ? '' : 'ES'}.`}
           </p>
 
-          {!setMode && target ? (
+          {!stepIsSet && step ? (
             <div className="notecells" aria-label="Line diff">
-              {target.pcs.map((pc, index) => {
+              {step.targetPcs.map((pc, index) => {
                 const row = result?.rows?.[index]
                 const status = row?.status || 'missing'
                 return (

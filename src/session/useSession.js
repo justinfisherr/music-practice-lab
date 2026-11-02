@@ -27,13 +27,18 @@ function makeStages(startedAt, modules = []) {
 
 export function makeSession(now = Date.now(), plan = null, keyIdOverride = null, variant = 'tonight') {
   const date = laDate(new Date(now))
-  const keyId = keyIdOverride || tonightKey(date)
+  const tonightKeyId = tonightKey(date)
+  const keyId = keyIdOverride || tonightKeyId
   const seed = seedFor(date, keyId)
   const startedAt = new Date(now).toISOString()
   const composition = composeSession({ date, keyId, seed, plan, variant })
   return {
     id: newId(),
     kind: 'graded',
+    scope: 'session',
+    variant,
+    keySource: variant === 'bonus' ? 'bonus' : 'tonight',
+    tonightKeyId,
     date,
     keyId,
     seed,
@@ -53,13 +58,17 @@ export function makeSession(now = Date.now(), plan = null, keyIdOverride = null,
 // listening. It has no stages and never earns XP.
 export function makeManualSession(now = Date.now(), focus = 'FREE PLAY') {
   const date = laDate(new Date(now))
-  const keyId = tonightKey(date)
+  const tonightKeyId = tonightKey(date)
+  const keyId = tonightKeyId
   const seed = seedFor(date, keyId)
   const startedAt = new Date(now).toISOString()
   return {
     id: newId(),
     kind: 'manual',
+    scope: focus === 'LESSONS' ? 'lesson' : 'open',
     focus,
+    keySource: 'tonight',
+    tonightKeyId,
     date,
     keyId,
     seed,
@@ -152,7 +161,11 @@ export function toPayload(session) {
   return {
     id: session.id,
     kind: session.kind || 'graded',
+    scope: session.scope || (session.kind === 'manual' ? 'open' : 'session'),
     focus: session.focus || null,
+    variant: session.variant || session.composition?.variant || 'tonight',
+    keySource: session.keySource || 'tonight',
+    tonightKeyId: session.tonightKeyId || session.keyId,
     date: session.date,
     keyId: session.keyId,
     seed: session.seed,
@@ -177,9 +190,13 @@ export function toPayload(session) {
     })),
     payload: {
       version: session.composition?.version ?? 2,
+      scope: session.scope || (session.kind === 'manual' ? 'open' : 'session'),
       moduleCount: session.stages.length,
       source: session.kind === 'manual' ? 'manual' : session.composition?.source || 'local',
       focus: session.focus || null,
+      variant: session.variant || session.composition?.variant || 'tonight',
+      keySource: session.keySource || 'tonight',
+      tonightKeyId: session.tonightKeyId || session.keyId,
       rationale: session.composition?.rationale ?? null,
       composition: session.composition,
       stages: session.stages.map((stage) => ({

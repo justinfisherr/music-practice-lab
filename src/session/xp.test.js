@@ -61,9 +61,9 @@ test('v3 three tier-1 modules first try scores 60', () => {
   assert.equal(deriveXp(stages, 'done'), 60)
 })
 
-test('v3 mixed tiers first try scores 83', () => {
+test('v3 mixed tiers first try scores 75', () => {
   const stages = [mod('scale', 1, 1, true), mod('maj7', 2, 1, true), mod('ii_v_i', 3, 1, true)]
-  assert.equal(deriveXp(stages, 'done'), 83)
+  assert.equal(deriveXp(stages, 'done'), 75)
 })
 
 test('v3 retries lose the first-try bonus but keep the base', () => {
@@ -73,7 +73,7 @@ test('v3 retries lose the first-try bonus but keep the base', () => {
 
 test('v3 abandoned still pays passed modules, no completion bonus', () => {
   const stages = [mod('scale', 1, 1, true), mod('maj7', 2, 1, true), mod('ii_v_i', 3, 2, false)]
-  assert.equal(deriveXp(stages, 'abandoned'), 38)
+  assert.equal(deriveXp(stages, 'abandoned'), 35)
 })
 
 test('v3 breakdown names each module', () => {
@@ -81,4 +81,12 @@ test('v3 breakdown names each module', () => {
   const xp = xpBreakdown(stages, 'abandoned')
   assert.deepEqual(xp.modules.map((row) => row.xp), [15, 0])
   assert.equal(xp.complete, 0)
+})
+
+test('v3 completion bonus is session scope only', () => {
+  const stages = [mod('scale', 1, 1, true), mod('maj7', 2, 1, true), mod('ii_v_i', 3, 1, true)]
+  assert.equal(deriveXp(stages, 'done', 'graded', 'session'), 75)
+  assert.equal(deriveXp(stages, 'done', 'graded', 'lesson'), 60)
+  assert.equal(deriveXp(stages, 'done', 'graded', 'open'), 60)
+  assert.equal(deriveXp(stages, 'abandoned', 'graded', 'session'), 60)
 })
