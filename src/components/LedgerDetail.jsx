@@ -55,9 +55,11 @@ export default function LedgerDetail({ id, onBack }) {
 
   const manual = run.kind === 'manual'
   const payload = run.payload || {}
+  const lesson = payload.scope === 'lesson'
   const v3 = payload.version === 3 || payload.composition?.version === 3
   const stages = run.stages || payload.stages || []
   const modules = payload.composition?.modules || []
+  const lessonModule = lesson ? modules[0] : null
   const hook = v3 ? null : payload.composition?.stages?.find((stage) => stage.id === 'hook')
   const attempts = run.attempts ?? stages.reduce((sum, stage) => sum + (stage.attempts || 0), 0)
   const misses = run.misses ?? stages.reduce((sum, stage) => sum + (stage.misses || 0), 0)
@@ -74,10 +76,16 @@ export default function LedgerDetail({ id, onBack }) {
         <span className="detail__kicker">
           {manual
             ? `${run.date} · ${run.focus || 'OPEN'}`
-            : `${run.date} · ${run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}`}
+            : lesson
+              ? `${run.date} · LESSON`
+              : `${run.date} · ${run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}`}
         </span>
         <h2 className="detail__title" id="detail-title">
-          {manual ? 'OPEN SESSION' : `${keyDisplay(run.keyId)} MAJOR`}
+          {manual
+            ? 'OPEN SESSION'
+            : lesson
+              ? lessonModule?.title || 'LESSON'
+              : `${keyDisplay(run.keyId)} MAJOR`}
         </h2>
         <p className="detail__meta">
           {manual

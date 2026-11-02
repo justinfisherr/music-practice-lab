@@ -49,7 +49,7 @@ Monospace throughout at a readable floor, with large tracked masthead type and s
 
 ## Layout
 
-Single 860px column of bordered blocks. Navigation is a row of hard-edged tabs that scrolls on narrow screens.
+Single 860px column of bordered blocks. Navigation is a grid of hard-ruled doors: 2x2 on phones, four-up from 1024px. Each door is a labeled block with a plain-language subtitle, a 56px minimum height, and an ink inversion when active. The masthead and nav sit above a `#main-content` target; a `SKIP TO CONTENT` link appears on keyboard focus.
 
 ## Shapes
 
@@ -100,3 +100,19 @@ REEL inverts by construction: `--ink` becomes light, so the masthead, TONIGHT bl
 ## Tokens and the fixed signal
 
 `--signal` is now defined in `:root` and every skin; it had been referenced by the START button without a value, leaving the primary action unfilled. Small signal text uses `--signal-ink`, never `--signal`. `--on-fill` is text placed on a filled control; `--field` is an input/raised surface, distinct from `--panel`. `color-scheme: var(--scheme)` lets form controls follow the active skin's light/dark scheme.
+
+## Lessons
+
+The LESSONS tab is ten cards derived from the module catalog: tier stamp, title, the catalog's teach sentence, a `SET/ORDERED · n NOTES` meta line, and one signal-red `TRY IT`. Cards are one column on phones and three from 1024px. Tier filter chips are ALL / TIER 1 · SHAPE / TIER 2 · FUNCTION / TIER 3 · VOICE LEADING. A `#lessons?type=GUIDE_TONES` deep link outlines and scrolls that card into view. `TRY IT` starts a one-module graded run in tonight's key with lesson scope: module XP plus the first-try bonus, never the completion bonus, and the ledger labels the row as a lesson.
+
+## Desk and rail
+
+The SESSION desk is a 12-column grid from 1024px. At 1280px and up it is wheel 6 / mission 4 / slim rail 2, capped at 1320px with 20px gutters; the wheel stage is 400-480px (440px max). From 1024-1279px it is wheel 7 / mission 5, with the rail becoming a full-width three-cell band under both. The mission column holds the plan chip, WHY THESE MODULES, the module list with teach lines, START, the MIDI row, and a manual-session disclosure. The rail holds the compact rank line and XP band, six wardrobe swatches that open the ledger wardrobe, the last three sessions, and the 7-night numbers. Mobile stays a single column.
+
+The run is a 340px module rail plus the active module panel from 1024px. The rail lists number, type, teach line, and PASSED / UP NEXT / OPEN; a passed module opens a read-only review. The sticky session bar spans the top, the rail scrolls inside its own column, and the active panel is keyed by module so the page does not jump. The ledger is 8 columns of meters, filters, and rows plus a 4-column side of rank/wardrobe, a 4x3 key heat grid, and 7-night stats. Detail stays a single column.
+
+## Wheel and teach tokens
+
+The wheel face and inactive sectors use `--panel` with `--line` rules; the active sector is `--ink` fill with `--bg` text. The pointer is the only signal-red element on the wheel. Hub text follows the same ink/paper rule. `--wheel-spin: 2200ms` and `--wheel-ease: cubic-bezier(.12,.62,.06,1)` are the one authored motion: spin to the sector, then a 90ms pointer settle. Reduced motion skips the spin and places the sector directly. Teach copy uses `--teach-size: 12px` / `--teach-line: 1.5`; the run rail width is `--desk-rail: 340px`.
+
+Small red and green text stays on `--signal-ink` / `--ok-ink`. No new palettes, no nested cards, no emojis.

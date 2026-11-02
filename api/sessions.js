@@ -312,6 +312,7 @@ function summary(row) {
     date: row.date,
     kind: row.kind || 'graded',
     focus: row.focus || null,
+    scope: row.scope || (row.kind === 'manual' ? 'open' : 'session'),
     keyId: row.key_id,
     seed: row.seed,
     status: row.status,
@@ -353,7 +354,7 @@ export default async function handler(req, res) {
         const { rows } = await pool.query(
           `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                   ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
-                  module_count, payload->>'focus' AS focus,
+                  module_count, payload->>'focus' AS focus, payload->>'scope' AS scope,
                   payload#>'{composition,modules}' AS module_types, payload
              FROM practice.sessions WHERE id = $1`,
           [String(id)],
@@ -385,7 +386,7 @@ export default async function handler(req, res) {
       const { rows } = await pool.query(
         `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                 ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
-                module_count, payload->>'focus' AS focus,
+                module_count, payload->>'focus' AS focus, payload->>'scope' AS scope,
                 payload#>'{composition,modules}' AS module_types
            FROM practice.sessions
           ${where.length ? `WHERE ${where.join(' AND ')}` : ''}

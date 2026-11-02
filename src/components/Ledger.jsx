@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MAJOR_KEYS, keyDisplay } from '../data/scales.js'
 import { getRuns } from '../session/api.js'
+import { lastSevenRuns } from '../session/tonight.js'
 import * as store from '../session/store.js'
 import { RankCard } from './Rank.jsx'
 import Wardrobe from './Wardrobe.jsx'
@@ -10,6 +11,14 @@ function clock(ms) {
   const minutes = Math.floor(total / 60)
   const seconds = total % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function rowLabel(run) {
+  if (run.kind !== 'manual' && run.scope === 'lesson') {
+    return run.moduleTypes?.length ? `LESSON · ${run.moduleTypes[0]}` : 'LESSON'
+  }
+  if (run.kind === 'manual') return run.focus || 'OPEN'
+  return keyDisplay(run.keyId)
 }
 
 export default function Ledger({
@@ -71,6 +80,13 @@ export default function Ledger({
   const misses = filtered.reduce((sum, run) => sum + (run.misses || 0), 0)
   const passRate = stageTotal ? Math.round((passed / stageTotal) * 100) : 0
 
+  const week = lastSevenRuns(runs)
+  const weekMinutes = Math.round(week.reduce((sum, run) => sum + (run.durationMs || 0), 0) / 60000)
+  const weekGraded = week.filter((run) => run.kind !== 'manual')
+  const weekModules = weekGraded.reduce((sum, run) => sum + (run.moduleCount || 3), 0)
+  const weekPassed = weekGraded.reduce((sum, run) => sum + (run.passedStages || 0), 0)
+  const weekRate = weekModules ? Math.round((weekPassed / weekModules) * 100) : 0
+
   return (
     <section className="ledger" aria-labelledby="ledger-title">
       <div className="ledger__head">
@@ -82,157 +98,191 @@ export default function Ledger({
         </span>
       </div>
 
-      <RankCard rank={rank} onOpenWardrobe={() => setShowWardrobe((value) => !value)} />
-      {showWardrobe ? <Wardrobe level={rank?.level ?? 1} /> : null}
+      <div className="ledger__grid">
+        <div className="ledger__main">
+          {syncState.pending > 0 || syncState.dead > 0 ? (
+            <p className={`syncnote${syncState.dead ? ' syncnote--dead' : ' syncnote--queued'}`}>
+              {syncState.pending > 0
+                ? `${syncState.pending} RUN${syncState.pending === 1 ? '' : 'S'} WAITING TO SYNC.`
+                : ''}{' '}
+              {syncState.dead > 0
+                ? `${syncState.dead} RUN${syncState.dead === 1 ? '' : 'S'} COULD NOT SYNC — KEPT ON THIS DEVICE.`
+                : ''}
+            </p>
+          ) : null}
 
-      {syncState.pending > 0 || syncState.dead > 0 ? (
-        <p className={`syncnote${syncState.dead ? ' syncnote--dead' : ' syncnote--queued'}`}>
-          {syncState.pending > 0
-            ? `${syncState.pending} RUN${syncState.pending === 1 ? '' : 'S'} WAITING TO SYNC.`
-            : ''}{' '}
-          {syncState.dead > 0
-            ? `${syncState.dead} RUN${syncState.dead === 1 ? '' : 'S'} COULD NOT SYNC — KEPT ON THIS DEVICE.`
-            : ''}
-        </p>
-      ) : null}
+          <div className="meters" aria-label="Ledger meters">
+            <div className="meter">
+              <span className="meter__value">{filtered.length}</span>
+              <span className="meter__label">SESSIONS</span>
+              <div className="meter__bar">
+                <div
+                  className="meter__fill"
+                  style={{ width: `${Math.min(100, filtered.length * 4)}%` }}
+                />
+              </div>
+            </div>
+            <div className="meter">
+              <span className="meter__value">{minutes}</span>
+              <span className="meter__label">MINUTES</span>
+              <div className="meter__bar">
+                <div className="meter__fill" style={{ width: `${Math.min(100, minutes / 2)}%` }} />
+              </div>
+            </div>
+            <div className="meter">
+              <span className="meter__value">{passRate}%</span>
+              <span className="meter__label">MODULES PASSED · {stageTotal}</span>
+              <div className="meter__bar">
+                <div className="meter__fill" style={{ width: `${passRate}%` }} />
+              </div>
+            </div>
+            <div className="meter">
+              <span className="meter__value">{misses}</span>
+              <span className="meter__label">MISSES</span>
+              <div className="meter__bar">
+                <div className="meter__fill" style={{ width: `${Math.min(100, misses)}%` }} />
+              </div>
+            </div>
+          </div>
 
-      <div className="meters" aria-label="Ledger meters">
-        <div className="meter">
-          <span className="meter__value">{filtered.length}</span>
-          <span className="meter__label">SESSIONS</span>
-          <div className="meter__bar">
-            <div className="meter__fill" style={{ width: `${Math.min(100, filtered.length * 4)}%` }} />
-          </div>
-        </div>
-        <div className="meter">
-          <span className="meter__value">{minutes}</span>
-          <span className="meter__label">MINUTES</span>
-          <div className="meter__bar">
-            <div className="meter__fill" style={{ width: `${Math.min(100, minutes / 2)}%` }} />
-          </div>
-        </div>
-        <div className="meter">
-          <span className="meter__value">{passRate}%</span>
-          <span className="meter__label">MODULES PASSED · {stageTotal}</span>
-          <div className="meter__bar">
-            <div className="meter__fill" style={{ width: `${passRate}%` }} />
-          </div>
-        </div>
-        <div className="meter">
-          <span className="meter__value">{misses}</span>
-          <span className="meter__label">MISSES</span>
-          <div className="meter__bar">
-            <div className="meter__fill" style={{ width: `${Math.min(100, misses)}%` }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="heatgrid" aria-label="Sessions by key">
-        {MAJOR_KEYS.map((key) => {
-          const count = counts.get(key.id) || 0
-          const level = count ? Math.min(4, Math.ceil((count / maxCount) * 4)) : 0
-          const selected = filterKey === key.id
-          return (
+          <div className="filterrow" role="group" aria-label="Filter by key">
             <button
               type="button"
-              className={`heatcell heat--${level}${selected ? ' is-active' : ''}`}
-              key={key.id}
-              disabled={!count}
-              aria-pressed={selected}
-              aria-label={`${keyDisplay(key.id)} major, ${count} session${count === 1 ? '' : 's'}`}
-              onClick={() => onFilter(selected ? null : key.id)}
+              className={`chipbtn${!filterKey ? ' is-active' : ''}`}
+              aria-pressed={!filterKey}
+              onClick={() => onFilter(null)}
             >
-              <span className="heatcell__key">{keyDisplay(key.id)}</span>
-              <span className="heatcell__count">{count} RUN{count === 1 ? '' : 'S'}</span>
+              ALL KEYS
             </button>
-          )
-        })}
-      </div>
+            {presentKeys.map((keyId) => (
+              <button
+                type="button"
+                className={`chipbtn${filterKey === keyId ? ' is-active' : ''}`}
+                key={keyId}
+                aria-pressed={filterKey === keyId}
+                onClick={() => onFilter(filterKey === keyId ? null : keyId)}
+              >
+                {keyDisplay(keyId)} MAJOR
+              </button>
+            ))}
+          </div>
 
-      <div className="filterrow" role="group" aria-label="Filter by key">
-        <button
-          type="button"
-          className={`chipbtn${!filterKey ? ' is-active' : ''}`}
-          aria-pressed={!filterKey}
-          onClick={() => onFilter(null)}
-        >
-          ALL KEYS
-        </button>
-        {presentKeys.map((keyId) => (
-          <button
-            type="button"
-            className={`chipbtn${filterKey === keyId ? ' is-active' : ''}`}
-            key={keyId}
-            aria-pressed={filterKey === keyId}
-            onClick={() => onFilter(filterKey === keyId ? null : keyId)}
-          >
-            {keyDisplay(keyId)} MAJOR
-          </button>
-        ))}
-      </div>
+          {error && runs.length > 0 ? (
+            <p className="syncnote syncnote--queued">LEDGER OFFLINE — SHOWING CACHED RUNS.</p>
+          ) : null}
 
-      {error && runs.length > 0 ? (
-        <p className="syncnote syncnote--queued">LEDGER OFFLINE — SHOWING CACHED RUNS.</p>
-      ) : null}
-
-      {loading && runs.length === 0 ? (
-        <div className="emptyblock">READING THE LEDGER…</div>
-      ) : filtered.length === 0 ? (
-        <div className="emptyblock">
-          {runs.length === 0 ? (
-            error ? (
-              <>LEDGER OFFLINE — NO CACHED RUNS.</>
-            ) : (
-              <>
-                NO SESSIONS YET.
-                <br />
-                <button type="button" className="linkbtn" onClick={onStartSession}>
-                  START TONIGHT
-                </button>
-              </>
-            )
+          {loading && runs.length === 0 ? (
+            <div className="emptyblock">READING THE LEDGER…</div>
+          ) : filtered.length === 0 ? (
+            <div className="emptyblock">
+              {runs.length === 0 ? (
+                error ? (
+                  <>LEDGER OFFLINE — NO CACHED RUNS.</>
+                ) : (
+                  <>
+                    NO SESSIONS YET.
+                    <br />
+                    <button type="button" className="linkbtn" onClick={onStartSession}>
+                      START TONIGHT
+                    </button>
+                  </>
+                )
+              ) : (
+                <>
+                  NO RUNS IN {keyDisplay(filterKey)} MAJOR YET.
+                  <br />
+                  <button type="button" className="linkbtn" onClick={() => onFilter(null)}>
+                    CLEAR FILTER
+                  </button>
+                </>
+              )}
+            </div>
           ) : (
-            <>
-              NO RUNS IN {keyDisplay(filterKey)} MAJOR YET.
-              <br />
-              <button type="button" className="linkbtn" onClick={() => onFilter(null)}>
-                CLEAR FILTER
-              </button>
-            </>
+            <div className="runlist">
+              {filtered.map((run) => {
+                const manual = run.kind === 'manual'
+                return (
+                  <button type="button" className="runrow" key={run.id} onClick={() => onOpen(run.id)}>
+                    <span className="runrow__date">
+                      {run.date} · {clock(run.durationMs)}
+                    </span>
+                    <span className="runrow__key">{rowLabel(run)}</span>
+                    <span className="runrow__stats">
+                      {manual
+                        ? 'OPEN SESSION'
+                        : `${run.attempts} ATTEMPTS · ${run.misses} MISSES · ${run.passedStages}/${run.moduleCount || 3} MODULES${
+                            run.moduleTypes?.length ? ` · ${run.moduleTypes.join(' ')}` : ''
+                          }`}
+                    </span>
+                    <span
+                      className={`runrow__status${run.status === 'abandoned' ? ' is-abandoned' : ''}`}
+                    >
+                      {manual ? 'DONE' : run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           )}
-        </div>
-      ) : (
-        <div className="runlist">
-          {filtered.map((run) => {
-            const manual = run.kind === 'manual'
-            return (
-              <button type="button" className="runrow" key={run.id} onClick={() => onOpen(run.id)}>
-                <span className="runrow__date">
-                  {run.date} · {clock(run.durationMs)}
-                </span>
-                <span className="runrow__key">{manual ? run.focus || 'OPEN' : keyDisplay(run.keyId)}</span>
-                <span className="runrow__stats">
-                  {manual
-                    ? 'OPEN SESSION'
-                    : `${run.attempts} ATTEMPTS · ${run.misses} MISSES · ${run.passedStages}/${run.moduleCount || 3} MODULES${
-                        run.moduleTypes?.length ? ` · ${run.moduleTypes.join(' ')}` : ''
-                      }`}
-                </span>
-                <span className={`runrow__status${run.status === 'abandoned' ? ' is-abandoned' : ''}`}>
-                  {manual ? 'DONE' : run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
 
-      {runs.length > 0 && !error ? (
-        <div className="queuebar">
-          <span>{filtered.length} SHOWN</span>
-          <span>{syncState.syncing ? 'SYNCING…' : 'LIVE FROM practice.sessions'}</span>
+          {runs.length > 0 && !error ? (
+            <div className="queuebar">
+              <span>{filtered.length} SHOWN</span>
+              <span>{syncState.syncing ? 'SYNCING…' : 'LIVE FROM practice.sessions'}</span>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+
+        <aside className="ledger__side" aria-label="Ledger summary">
+          <RankCard rank={rank} onOpenWardrobe={() => setShowWardrobe((value) => !value)} />
+          {showWardrobe ? <Wardrobe level={rank?.level ?? 1} /> : null}
+
+          <div className="ledger__block">
+            <span className="rail__label">KEYS · 4 × 3</span>
+            <div className="heatgrid" aria-label="Sessions by key">
+              {MAJOR_KEYS.map((key) => {
+                const count = counts.get(key.id) || 0
+                const level = count ? Math.min(4, Math.ceil((count / maxCount) * 4)) : 0
+                const selected = filterKey === key.id
+                return (
+                  <button
+                    type="button"
+                    className={`heatcell heat--${level}${selected ? ' is-active' : ''}`}
+                    key={key.id}
+                    disabled={!count}
+                    aria-pressed={selected}
+                    aria-label={`${keyDisplay(key.id)} major, ${count} session${count === 1 ? '' : 's'}`}
+                    onClick={() => onFilter(selected ? null : key.id)}
+                  >
+                    <span className="heatcell__key">{keyDisplay(key.id)}</span>
+                    <span className="heatcell__count">
+                      {count} RUN{count === 1 ? '' : 'S'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="ledger__block">
+            <span className="rail__label">7 NIGHTS</span>
+            <div className="strip">
+              <div className="strip__cell">
+                <span className="strip__value">{week.length}</span>
+                <span className="strip__label">SESSIONS</span>
+              </div>
+              <div className="strip__cell">
+                <span className="strip__value">{weekMinutes}</span>
+                <span className="strip__label">MINUTES</span>
+              </div>
+              <div className="strip__cell">
+                <span className="strip__value">{weekRate}%</span>
+                <span className="strip__label">PASSED</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
     </section>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MAJOR_KEYS, keyDisplay } from '../data/scales.js'
+import { noteName } from '../data/diminishedChords.js'
 import {
   angleForKey,
   bonusForKey,
@@ -55,6 +56,7 @@ export default function Wheel({
   activeKey,
   bonusKey,
   variant = 'tonight',
+  activeNotes = [],
   disabled = false,
   onBonus,
   onTonight,
@@ -81,8 +83,9 @@ export default function Wheel({
   }
 
   function settle() {
-    setSpinning(false)
+    if (!spinningRef.current) return
     spinningRef.current = false
+    setSpinning(false)
     setSettling(true)
     queue(() => setSettling(false), SETTLE_MS)
   }
@@ -101,6 +104,7 @@ export default function Wheel({
       markSpun(date)
       settle()
     }, SPIN_MS)
+    queue(() => settle(), SPIN_MS + 1500)
   }, [date, tonightKey, reduced])
 
   // When the parent switches between tonight and bonus, rotate to the new
@@ -131,10 +135,18 @@ export default function Wheel({
       markSpun(date)
       settle()
     }, SPIN_MS)
+    queue(() => settle(), SPIN_MS + 1500)
   }
 
   const active = activeKey || tonightKey
   const label = variant === 'bonus' ? 'BONUS' : 'TONIGHT'
+
+  const activeIndex = MAJOR_KEYS.findIndex((k) => k.id === active)
+  const activeKeyObj = MAJOR_KEYS[activeIndex] || MAJOR_KEYS[0]
+  const diatonicPcs = [0, 2, 4, 5, 7, 9, 11].map((step) => (activeKeyObj.tonic + step) % 12)
+  const livePcs = new Set((activeNotes || []).map((n) => ((n % 12) + 12) % 12))
+  const liveAny = livePcs.size > 0
+  const liveOutside = [...livePcs].some((pc) => !diatonicPcs.includes(pc))
 
   return (
     <div className="wheel">
@@ -157,11 +169,17 @@ export default function Wheel({
           >
             {MAJOR_KEYS.map((key, index) => {
               const isActive = key.id === active
+              const dist = Math.min(
+                (index - activeIndex + 12) % 12,
+                (activeIndex - index + 12) % 12,
+              )
+              const liveClass = isActive && liveAny ? (liveOutside ? ' is-outside' : ' is-live') : ''
               return (
                 <g
                   key={key.id}
-                  className={`wheel__sector${isActive ? ' is-active' : ''}`}
-                  transform={`rotate(${index * 30})`}
+                  className={`wheel__sector${isActive ? ' is-active' : ''}${liveClass}`}
+                  style={{ '--dist': dist }}
+                  transform={`rotate(${index * 30} ${CX} ${CY})`}
                 >
                   <path d={SECTOR} className="wheel__sector-fill" />
                   <line
@@ -173,7 +191,6 @@ export default function Wheel({
                   />
                   <g transform={`translate(${CX} ${CY - LABEL_R})`}>
                     <text
-                      transform="rotate(90)"
                       textAnchor="middle"
                       dominantBaseline="middle"
                       className={`wheel__label${isActive ? ' is-active' : ''}`}
@@ -182,8 +199,8 @@ export default function Wheel({
                     </text>
                     {key.id === tonightKey ? (
                       <text
-                        transform="rotate(90)"
-                        x={14}
+                        x={0}
+                        y={12}
                         textAnchor="middle"
                         dominantBaseline="middle"
                         className={`wheel__tonight${isActive ? ' is-active' : ''}`}
@@ -191,6 +208,15 @@ export default function Wheel({
                         TONIGHT
                       </text>
                     ) : null}
+                  </g>
+                  <g transform={`translate(${CX} ${CY - 66})`}>
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="wheel__minor"
+                    >
+                      {key.scale[5]}m
+                    </text>
                   </g>
                 </g>
               )
@@ -216,9 +242,14 @@ export default function Wheel({
           ? `SPINNING TO ${label}…`
           : `${keyDisplay(active)} MAJOR · ${label}${bonusKey && bonusKey !== tonightKey ? ` · BONUS ${keyDisplay(bonusKey)}` : ''}`}
       </p>
+      {activeNotes.length ? (
+        <p className={`wheel__live${liveOutside ? ' is-outside' : ''}`}>
+          LIVE · {activeNotes.map((n) => noteName(n)).join(' ')} · {liveOutside ? 'OUTSIDE THE KEY' : 'IN KEY'}
+        </p>
+      ) : null}
 
       <div className="wheel__actions">
-        <button type="button" className="btn btn--ghost" onClick={spin} disabled={disabled || spinning}>
+        <button type="button" className="btn btn--ghost" onClick={spin} disabled={disabled}>
           {spinning ? 'SPINNING…' : 'SPIN'}
         </button>
         {variant === 'bonus' ? (
@@ -238,6 +269,8 @@ export default function Wheel({
       </div>
 
       <p className="wheel__foot">
+        SHADED BY FIFTHS FROM {keyDisplay(active)} · NEAR → FAR
+        <br />
         TONIGHT {keyDisplay(tonightKey)}
         {bonusKey && bonusKey !== tonightKey ? ` · BONUS ${keyDisplay(bonusKey)}` : ''}
       </p>

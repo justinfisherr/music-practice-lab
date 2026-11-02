@@ -39,3 +39,14 @@ export function seedFor(dateStr, keyId) {
   // Postgres integer is signed 32-bit; keep the FNV bits while staying in range.
   return fnv1a(`${dateStr}|${keyId}`) | 0
 }
+
+// Runs inside the current LA week, newest first. Used by the desk rail and the
+// ledger side column so both read the same seven nights.
+export function lastSevenRuns(runs, dateStr = laDate()) {
+  const today = daysSinceEpoch(dateStr)
+  return (Array.isArray(runs) ? runs : []).filter((run) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(run.date || '')) return false
+    const age = today - daysSinceEpoch(run.date)
+    return age >= 0 && age < 7
+  })
+}

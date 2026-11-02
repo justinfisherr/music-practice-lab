@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { composeSession } from './compose.js'
+import { composeLesson, composeSession } from './compose.js'
 import { laDate, seedFor, tonightKey } from './tonight.js'
 import { postRun } from './api.js'
 import * as store from './store.js'
@@ -38,6 +38,38 @@ export function makeSession(now = Date.now(), plan = null, keyIdOverride = null,
     scope: 'session',
     variant,
     keySource: variant === 'bonus' ? 'bonus' : 'tonight',
+    tonightKeyId,
+    date,
+    keyId,
+    seed,
+    status: 'active',
+    startedAt,
+    endedAt: null,
+    pausedAt: null,
+    pausedMs: 0,
+    currentStage: 0,
+    xpBefore: store.loadXp(),
+    stages: makeStages(startedAt, composition.modules),
+    composition,
+  }
+}
+
+// A lesson is a graded run with exactly one module and lesson scope, so the
+// server pays module XP and the first-try bonus but no completion bonus.
+export function makeLessonSession(now = Date.now(), type, keyIdOverride = null) {
+  const date = laDate(new Date(now))
+  const tonightKeyId = tonightKey(date)
+  const keyId = keyIdOverride || tonightKeyId
+  const seed = seedFor(date, keyId)
+  const startedAt = new Date(now).toISOString()
+  const composition = composeLesson({ date, keyId, seed, type })
+  if (!composition) return null
+  return {
+    id: newId(),
+    kind: 'graded',
+    scope: 'lesson',
+    variant: 'lesson',
+    keySource: 'tonight',
     tonightKeyId,
     date,
     keyId,
@@ -319,6 +351,15 @@ export function useSession() {
     [commit],
   )
 
+  const startLesson = useCallback(
+    (type, keyId = null) => {
+      const next = makeLessonSession(Date.now(), type, keyId)
+      if (next) commit(next)
+      return next
+    },
+    [commit],
+  )
+
   const recordAttempt = useCallback(
     (stageId, miss = false) => dispatch({ type: 'attempt', stageId, miss }),
     [dispatch],
@@ -373,6 +414,7 @@ export function useSession() {
     session,
     start,
     startManual,
+    startLesson,
     recordAttempt,
     advanceStage,
     finish,

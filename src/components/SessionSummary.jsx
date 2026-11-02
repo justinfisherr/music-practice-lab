@@ -64,13 +64,13 @@ export default function SessionSummary({ session, syncState, onDone, onAgain, on
   const totalMisses = stages.reduce((sum, stage) => sum + stage.misses, 0)
   const scope = session.scope || (session.kind === 'manual' ? 'open' : 'session')
   const xp = xpBreakdown(stages, session.status, scope)
+  const kicker = scope === 'lesson' ? 'LESSON COMPLETE' : 'SESSION COMPLETE'
 
   return (
     <section className="summary" aria-labelledby="summary-title">
       <div className="summary__head">
         <span className="summary__kicker">
-          {session.status === 'abandoned' ? 'SESSION ENDED EARLY' : 'SESSION COMPLETE'} ·{' '}
-          {session.date}
+          {session.status === 'abandoned' ? `${kicker} ENDED EARLY` : kicker} · {session.date}
         </span>
         <h2 className="summary__title" id="summary-title">
           {keyDisplay(session.keyId)} MAJOR

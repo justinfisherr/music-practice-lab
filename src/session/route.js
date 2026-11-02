@@ -1,4 +1,4 @@
-export const VIEWS = ['session', 'freeplay', 'stats']
+export const VIEWS = ['session', 'lessons', 'freeplay', 'stats']
 export const SESSION_SUBS = ['run', 'summary']
 
 export function parseHash(hash = typeof window === 'undefined' ? '' : window.location.hash) {
@@ -14,6 +14,10 @@ export function parseHash(hash = typeof window === 'undefined' ? '' : window.loc
       key: query.get('key') || null,
       wardrobe: query.get('wardrobe') === 'open',
     }
+  }
+
+  if (parts[0] === 'lessons') {
+    return { view: 'lessons', type: query.get('type') || null }
   }
 
   if (parts[0] === 'session') {

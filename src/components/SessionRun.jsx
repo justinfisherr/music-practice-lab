@@ -40,6 +40,7 @@ export default function SessionRun({ practice, onFinished, onExit }) {
   const [hidden, setHidden] = useState(
     () => typeof document !== 'undefined' && document.visibilityState === 'hidden',
   )
+  const [review, setReview] = useState(null)
 
   const active = session?.status === 'active'
   const lost = active && midi.supported && !midi.connected
@@ -62,6 +63,11 @@ export default function SessionRun({ practice, onFinished, onExit }) {
     if (midi.connected) resume()
     else pause()
   }, [active, midi.supported, midi.connected, pause, resume])
+
+  // Moving to the next module closes any read-only review.
+  useEffect(() => {
+    setReview(null)
+  }, [session?.currentStage])
 
   if (!session || !active) {
     return (
@@ -93,6 +99,9 @@ export default function SessionRun({ practice, onFinished, onExit }) {
     abandon()
     onExit()
   }
+
+  const modules = session.composition?.modules || []
+  const reviewing = review != null && modules[review]
 
   return (
     <section className="sessionrun" aria-label="Tonight's session">
@@ -149,18 +158,37 @@ export default function SessionRun({ practice, onFinished, onExit }) {
       {!session.composition ? (
         <div className="emptyblock">SESSION DATA MISSING. LEAVE AND START AGAIN.</div>
       ) : session.composition.version === 3 ? (
-        <ModuleStage
-          key={`${stageId}-${session.currentStage}`}
-          module={session.composition.modules?.[session.currentStage]}
-          position={session.currentStage}
-          total={session.stages.length}
-          keyId={session.keyId}
-          recordAttempt={recordAttempt}
-          advanceStage={advanceStage}
-          finish={finish}
-          onFinished={onFinished}
-          disabled={pausedForInput}
-        />
+        <div className="run">
+          <RunRail
+            modules={modules}
+            stages={session.stages}
+            currentStage={session.currentStage}
+            review={review}
+            onReview={setReview}
+          />
+          <div className="run__main">
+            {reviewing ? (
+              <ModuleReview
+                module={modules[review]}
+                keyId={session.keyId}
+                onBack={() => setReview(null)}
+              />
+            ) : (
+              <ModuleStage
+                key={`${stageId}-${session.currentStage}`}
+                module={modules[session.currentStage]}
+                position={session.currentStage}
+                total={session.stages.length}
+                keyId={session.keyId}
+                recordAttempt={recordAttempt}
+                advanceStage={advanceStage}
+                finish={finish}
+                onFinished={onFinished}
+                disabled={pausedForInput}
+              />
+            )}
+          </div>
+        </div>
       ) : stageId === 'warmup' ? (
         <WarmupStage
           session={session}
@@ -186,6 +214,83 @@ export default function SessionRun({ practice, onFinished, onExit }) {
         />
       )}
     </section>
+  )
+}
+
+function RunRail({ modules, stages, currentStage, review, onReview }) {
+  return (
+    <aside className="runrail" aria-label="Session modules">
+      <span className="runrail__label">MODULES</span>
+      <ol className="runrail__list">
+        {modules.map((module, index) => {
+          const stage = stages[index]
+          const current = index === currentStage
+          const passed = stage?.passed === true
+          const status = current ? 'UP NEXT' : passed ? 'PASSED' : 'OPEN'
+          return (
+            <li key={`${module.type}-${index}`}>
+              <button
+                type="button"
+                className={`runrail__item${current ? ' is-current' : ''}${
+                  passed ? ' is-passed' : ''
+                }${review === index ? ' is-review' : ''}`}
+                aria-current={current ? 'step' : undefined}
+                disabled={!passed}
+                onClick={() => onReview(index)}
+              >
+                <span className="runrail__num">{String(index + 1).padStart(2, '0')}</span>
+                <span className="runrail__body">
+                  <span className="runrail__type">{module.type}</span>
+                  <span className="runrail__title">{module.title}</span>
+                  <span className="runrail__teach">{module.teach}</span>
+                </span>
+                <span className="runrail__status">{status}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </aside>
+  )
+}
+
+function ModuleReview({ module, keyId, onBack }) {
+  return (
+    <div className="stagecard modulestage reviewcard">
+      <div className="stagehead">
+        <span className="stagehead__eyebrow">
+          REVIEW · {keyDisplay(keyId)} MAJOR · T{module.tier}
+        </span>
+        <h2 className="stagehead__title">{module.title}</h2>
+        <p className="stagehead__copy">{module.teach}</p>
+      </div>
+
+      <div className="modulewhy">
+        <span className="modulewhy__label">WHY</span>
+        <span>{module.why}</span>
+        <span className="modulewhy__est">{module.estSec}S</span>
+      </div>
+
+      <ul className="triadlist module-targets" aria-label={`${module.title} targets`}>
+        {module.steps.map((step, index) => (
+          <li className="triad is-passed" key={`${step.label}-${index}`}>
+            <span className="triad__numeral">{String(index + 1).padStart(2, '0')}</span>
+            <span className="triad__name">
+              {step.label} <span className="hintline">{step.targetNotes.join(' ')}</span>
+            </span>
+            <span className="triad__status">{step.kind === 'set' ? 'SET' : 'ORDER'}</span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="verdictline verdictline--ok">PASSED · REVIEW ONLY. NO KEYBOARD INPUT.</p>
+
+      <div className="stagefoot">
+        <button type="button" className="btn" onClick={onBack}>
+          BACK TO ACTIVE MODULE
+        </button>
+      </div>
+    </div>
   )
 }
 
