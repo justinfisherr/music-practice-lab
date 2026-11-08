@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import Navigation from './components/Navigation.jsx'
 import FreePlay from './components/FreePlay.jsx'
 import SessionTab from './components/SessionTab.jsx'
@@ -13,12 +13,16 @@ import { useSession } from './session/useSession.js'
 import { useRank } from './session/useRank.js'
 import { navigate, parseHash } from './session/route.js'
 
+// The crate carries the bundled jazz dataset, so it stays out of the first bundle.
+const Crate = lazy(() => import('./components/Crate.jsx'))
+
 // SESSION is the default; LESSONS is the card library; FREE PLAY is the sandbox
 // and LEDGER is the record. The ledger keeps the legacy `stats` route id.
 const ROUTES = [
   { id: 'session', label: 'SESSION', subtitle: 'The desk', component: SessionTab },
   { id: 'lessons', label: 'LESSONS', subtitle: 'Theory cards', component: Lessons },
   { id: 'freeplay', label: 'FREE PLAY', subtitle: 'Name what you play', component: FreePlay },
+  { id: 'crate', label: 'CRATE', subtitle: 'Records & artists', component: Crate },
   { id: 'stats', label: 'LEDGER', subtitle: 'The record', component: Ledger },
 ]
 
@@ -56,6 +60,11 @@ export default function App() {
     navigate('session/run')
   }
 
+  function startSet(keyId = null) {
+    practice.startSet(undefined, keyId)
+    navigate('session/run')
+  }
+
   function startLesson(type) {
     if (!practice.startLesson(type)) return
     navigate('session/run')
@@ -76,6 +85,8 @@ export default function App() {
     practice.reset()
     if (last?.scope === 'lesson' && last.composition?.modules?.[0]) {
       practice.startLesson(last.composition.modules[0].type, last.keyId)
+    } else if (last?.composition?.version === 4) {
+      practice.startSet(undefined, last.keyId)
     } else {
       practice.start()
     }
@@ -121,6 +132,7 @@ export default function App() {
         <SessionTab
           session={practice.session}
           onStart={startSession}
+          onStartSet={startSet}
           onStartManual={startManual}
           onResume={() => navigate('session/run')}
           onReview={() => navigate('session/summary')}
@@ -133,7 +145,22 @@ export default function App() {
       )
     }
   } else if (route.view === 'lessons') {
-    content = <Lessons type={route.type} onTry={startLesson} />
+    content = (
+      <Lessons type={route.type} foundation={route.foundation} onTry={startLesson} />
+    )
+  } else if (route.view === 'crate') {
+    content = (
+      <Suspense fallback={<div className="emptyblock">OPENING THE CRATE…</div>}>
+        <Crate rank={rank} recordId={route.id} />
+      </Suspense>
+    )
+  } else if (route.view === 'freeplay') {
+    content = (
+      <FreePlay
+        session={practice.session}
+        onStartManual={startManual}
+      />
+    )
   } else if (route.view === 'stats') {
     content = route.id ? (
       <LedgerDetail id={route.id} onBack={() => navigate('stats')} />
@@ -144,6 +171,7 @@ export default function App() {
         onOpen={openRun}
         onStartSession={() => navigate('session')}
         syncState={practice.syncState}
+        onRetrySync={practice.retrySync}
         rank={rank}
         onTotalXp={applyTotalXp}
         wardrobeOpen={route.wardrobe}

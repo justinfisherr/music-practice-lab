@@ -52,6 +52,21 @@ export function keyDisplay(id) {
   return id === 'Gb' ? 'F#' : keyById(id).label
 }
 
+// Natural relative minor: the same seven notes, centered on the 6th degree.
+export function relativeMinor(keyId) {
+  const key = keyById(keyId)
+  const tonic = (key.tonic + 9) % 12
+  const scale = [...key.scale.slice(5), ...key.scale.slice(0, 5)]
+  const steps = [0, 2, 3, 5, 7, 8, 10]
+  return {
+    id: `${key.id}m`,
+    name: `${key.scale[5]} MINOR`,
+    label: key.scale[5],
+    scale: [...scale, scale[0]],
+    pcs: [...steps.map((step) => (tonic + step) % 12), tonic],
+  }
+}
+
 // The seven diatonic triads of a major key, in order I..vii°.
 //   name          — display chord name ("F#m")
 //   numeral       — roman-numeral function ("ii")

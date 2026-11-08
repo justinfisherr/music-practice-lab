@@ -7,6 +7,7 @@ import { isMuted, playPhrase, setMuted, SILENT_HINT, unlockAudio } from '../sess
 import { noteName, pitchClassesEqual } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
 import ModuleStage from './ModuleStage.jsx'
+import SetRun from './SetRun.jsx'
 
 function clock(ms) {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -76,7 +77,7 @@ export default function SessionRun({ practice, onFinished, onExit }) {
           NO SESSION RUNNING.
           <br />
           <button type="button" className="linkbtn" onClick={onExit}>
-            BACK TO TONIGHT
+            BACK TO TODAY
           </button>
         </div>
       </section>
@@ -104,7 +105,7 @@ export default function SessionRun({ practice, onFinished, onExit }) {
   const reviewing = review != null && modules[review]
 
   return (
-    <section className="sessionrun" aria-label="Tonight's session">
+    <section className="sessionrun" aria-label="Today's session">
       <div className="sessionbar">
         <span className="sessionbar__key">{keyDisplay(session.keyId)} MAJOR</span>
         <span className="sessionbar__timer" aria-label={`Elapsed ${clock(elapsed)}`}>
@@ -157,6 +158,8 @@ export default function SessionRun({ practice, onFinished, onExit }) {
 
       {!session.composition ? (
         <div className="emptyblock">SESSION DATA MISSING. LEAVE AND START AGAIN.</div>
+      ) : session.composition.version === 4 ? (
+        <SetRun practice={practice} onFinished={onFinished} disabled={pausedForInput} />
       ) : session.composition.version === 3 ? (
         <div className="run">
           <RunRail

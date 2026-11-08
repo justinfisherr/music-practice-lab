@@ -55,3 +55,7 @@ export function getRuns({ limit = 40, key = null, before = null } = {}) {
 export function getRun(id) {
   return request(`?id=${encodeURIComponent(id)}`)
 }
+
+export function deleteRun(id) {
+  return request(`?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+}

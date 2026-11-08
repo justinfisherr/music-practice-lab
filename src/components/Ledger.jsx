@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { MAJOR_KEYS, keyDisplay } from '../data/scales.js'
 import { getRuns } from '../session/api.js'
 import { lastSevenRuns } from '../session/tonight.js'
+import { changesStats, loadRounds } from '../session/changes.js'
+import { PLAY_CHANGES } from '../session/set.js'
 import * as store from '../session/store.js'
 import { RankCard } from './Rank.jsx'
 import Wardrobe from './Wardrobe.jsx'
@@ -27,6 +29,7 @@ export default function Ledger({
   onOpen,
   onStartSession,
   syncState,
+  onRetrySync,
   rank,
   onTotalXp,
   wardrobeOpen,
@@ -35,6 +38,7 @@ export default function Ledger({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showWardrobe, setShowWardrobe] = useState(!!wardrobeOpen)
+  const [changes] = useState(() => changesStats(loadRounds()))
 
   useEffect(() => {
     if (wardrobeOpen) setShowWardrobe(true)
@@ -108,6 +112,11 @@ export default function Ledger({
               {syncState.dead > 0
                 ? `${syncState.dead} RUN${syncState.dead === 1 ? '' : 'S'} COULD NOT SYNC — KEPT ON THIS DEVICE.`
                 : ''}
+              {syncState.dead > 0 ? (
+                <button type="button" className="linkbtn" onClick={onRetrySync}>
+                  RETRY SYNC
+                </button>
+              ) : null}
             </p>
           ) : null}
 
@@ -183,7 +192,7 @@ export default function Ledger({
                     NO SESSIONS YET.
                     <br />
                     <button type="button" className="linkbtn" onClick={onStartSession}>
-                      START TONIGHT
+                      START TODAY
                     </button>
                   </>
                 )
@@ -265,7 +274,50 @@ export default function Ledger({
           </div>
 
           <div className="ledger__block">
-            <span className="rail__label">7 NIGHTS</span>
+            <span className="rail__label">CHANGES</span>
+            {changes.rounds ? (
+              <>
+                <div className="strip">
+                  <div className="strip__cell">
+                    <span className="strip__value">{changes.best}</span>
+                    <span className="strip__label">BEST</span>
+                  </div>
+                  <div className="strip__cell">
+                    <span className="strip__value">{changes.rounds}</span>
+                    <span className="strip__label">ROUNDS</span>
+                  </div>
+                  <div className="strip__cell">
+                    <span className="strip__value">{changes.average}</span>
+                    <span className="strip__label">AVERAGE</span>
+                  </div>
+                </div>
+                <div className="changesledger">
+                  {changes.perProgression.slice(0, 5).map((round) => (
+                    <span className="changesledger__row" key={`${round.keyId}-${round.changesId}-${round.barsPerChord}`}>
+                      <span>
+                        {keyDisplay(round.keyId)} ·{' '}
+                        {PLAY_CHANGES.find((entry) => entry.id === round.changesId)?.name ||
+                          round.changesId}
+                      </span>
+                      <strong>{round.score}</strong>
+                    </span>
+                  ))}
+                  {changes.last.map((round) => (
+                    <span className="changesledger__row changesledger__row--last" key={`${round.at}-${round.score}`}>
+                      <span>{round.at ? new Date(round.at).toLocaleDateString() : '—'}</span>
+                      <span>{round.accuracy}%</span>
+                      <strong>{round.score}</strong>
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="rail__empty">NO CHANGES ROUNDS YET.</p>
+            )}
+          </div>
+
+          <div className="ledger__block">
+            <span className="rail__label">7 DAYS</span>
             <div className="strip">
               <div className="strip__cell">
                 <span className="strip__value">{week.length}</span>

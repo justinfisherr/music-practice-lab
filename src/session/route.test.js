@@ -6,8 +6,14 @@ test('lessons deep link keeps the module type', () => {
   assert.deepEqual(parseHash('#lessons?type=GUIDE_TONES'), {
     view: 'lessons',
     type: 'GUIDE_TONES',
+    foundation: null,
   })
-  assert.deepEqual(parseHash('#lessons'), { view: 'lessons', type: null })
+  assert.deepEqual(parseHash('#lessons?foundation=chord-tones'), {
+    view: 'lessons',
+    type: null,
+    foundation: 'chord-tones',
+  })
+  assert.deepEqual(parseHash('#lessons'), { view: 'lessons', type: null, foundation: null })
 })
 
 test('ledger deep links keep the stats contract', () => {
@@ -22,5 +28,13 @@ test('ledger deep links keep the stats contract', () => {
     id: 'run-123',
     key: null,
     wardrobe: false,
+  })
+})
+
+test('crate deep links keep the record id', () => {
+  assert.deepEqual(parseHash('#crate'), { view: 'crate', id: null })
+  assert.deepEqual(parseHash('#crate/abbey-lincoln--abbey-sings-abbey'), {
+    view: 'crate',
+    id: 'abbey-lincoln--abbey-sings-abbey',
   })
 })

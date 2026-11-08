@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMidiContext } from '../hooks/MidiContext.jsx'
 import { keyDisplay } from '../data/scales.js'
-import { composeModules, resolveModule } from '../data/modules.js'
 import Wheel from './Wheel.jsx'
 import { loadBonus } from '../session/wheel.js'
 import { daysSinceEpoch, laDate, lastSevenRuns, seedFor, tonightKey } from '../session/tonight.js'
 import { getRuns } from '../session/api.js'
 import { getPlan } from '../session/plan.js'
 import { RankLine, XpBand } from './Rank.jsx'
+import FoundationLink from './FoundationLink.jsx'
 import { SKINS } from '../session/skin.js'
 import { unlockAudio } from '../session/audio.js'
 import * as store from '../session/store.js'
 
 const MANUAL_FOCUS = ['FREE PLAY', 'LESSONS', 'DRILLS', 'LISTENING']
-
-function moduleMeta(module) {
-  return `T${module.tier} · ${module.grading === 'set' ? 'SET' : 'ORDERED'} · ${module.estSec}S`
-}
 
 function runLabel(run) {
   if (run.scope === 'lesson') return 'LESSON'
@@ -24,28 +20,10 @@ function runLabel(run) {
   return `${keyDisplay(run.keyId)} MAJOR`
 }
 
-function PlanChip({ state, plan, count, variant }) {
-  const label = variant === 'bonus' ? 'BONUS' : 'TONIGHT'
-  if (state === 'composing') {
-    return <p className="planchip planchip--waiting">{label} · COMPOSING…</p>
-  }
-  if (state === 'composed' && plan?.source === 'llm') {
-    return (
-      <p className="planchip planchip--ready">
-        {label} · COMPOSED·{count}
-      </p>
-    )
-  }
-  return (
-    <p className="planchip">
-      {label} · STANDARD·{count}
-    </p>
-  )
-}
-
 export default function SessionTab({
   session,
   onStart,
+  onStartSet,
   onStartManual,
   onResume,
   onReview,
@@ -67,7 +45,6 @@ export default function SessionTab({
   const seed = seedFor(date, keyId)
   const [runs, setRuns] = useState(() => store.loadCachedRuns())
   const [plan, setPlan] = useState(null)
-  const [planState, setPlanState] = useState('composing')
   const [manualFocus, setManualFocus] = useState('FREE PLAY')
   const startedRef = useRef(false)
 
@@ -96,29 +73,18 @@ export default function SessionTab({
   useEffect(() => {
     let live = true
     setPlan(null)
-    setPlanState('composing')
     getPlan({ date, keyId, variant })
       .then((result) => {
         if (!live || startedRef.current) return
         setPlan(result)
-        setPlanState(result?.source === 'llm' ? 'composed' : 'standard')
       })
       .catch(() => {
-        if (live && !startedRef.current) setPlanState('standard')
+        // Classic rollback keeps the local modules.
       })
     return () => {
       live = false
     }
   }, [date, keyId, variant])
-
-  const localModules = composeModules({ seed, keyId, variant })
-  const plannedModules =
-    plan?.source === 'llm' && Array.isArray(plan.modules)
-      ? plan.modules
-          .map((module) => resolveModule({ type: module.type, params: module.params, keyId, seed }))
-          .filter(Boolean)
-      : []
-  const previewModules = plannedModules.length ? plannedModules : localModules
 
   const week = lastSevenRuns(runs, date)
   const minutes = Math.round(week.reduce((sum, run) => sum + (run.durationMs || 0), 0) / 60000)
@@ -137,6 +103,12 @@ export default function SessionTab({
     unlockAudio()
     startedRef.current = true
     onStart(planOverride, keyOverride, variantOverride)
+  }
+
+  function startSet(keyOverride = keyId) {
+    unlockAudio()
+    startedRef.current = true
+    onStartSet(keyOverride)
   }
 
   let action
@@ -171,9 +143,9 @@ export default function SessionTab({
       <button
         type="button"
         className="btn btn--huge btn--signal"
-        onClick={() => startSession(plan?.source === 'llm' ? plan : null)}
+        onClick={() => startSet()}
       >
-        START {variant === 'bonus' ? 'BONUS' : 'TONIGHT'}
+        START {variant === 'bonus' ? 'BONUS' : 'TODAY'}
       </button>
     )
   }
@@ -183,7 +155,7 @@ export default function SessionTab({
       <div className="desk">
         <aside className="desk__wheel">
           <div className="tonight">
-            <p className="tonight__kicker">TONIGHT · {date} · LOS ANGELES</p>
+            <p className="tonight__kicker">TODAY · {date} · LOS ANGELES</p>
             <h2 className="tonight__key" id="tonight-title">
               {keyDisplay(keyId)} MAJOR
             </h2>
@@ -218,39 +190,61 @@ export default function SessionTab({
         <div className="desk__main">
           <div className="mission">
             <div className="mission__top">
-              <PlanChip
-                state={planState}
-                plan={plan}
-                count={previewModules.length}
-                variant={variant}
-              />
-            </div>
-
-            <div className="whymodules">
-              <span className="whymodules__label">WHY THESE MODULES</span>
-              <p className="whymodules__copy">
-                {plan?.source === 'llm' && plan.rationale
-                  ? plan.rationale
-                  : 'The local catalog drew these easy to hard, with no repeats. Shape first, then function, then voice leading.'}
+              <p className="planchip planchip--ready">
+                {variant === 'bonus' ? 'BONUS' : 'TODAY'} · THE SET
               </p>
             </div>
 
-            <ol className="stagepreview" aria-label="Session modules">
-              {previewModules.map((module, index) => (
-                <li className="stagepreview__row" key={`${module.type}-${index}`}>
-                  <span className="stagepreview__num">{String(index + 1).padStart(2, '0')}</span>
-                  <span>
-                    <span className="stagepreview__type">{module.type}</span>
-                    <span className="stagepreview__title">{module.title}</span>
-                    <span className="stagepreview__copy">{module.teach}</span>
+            <div className="whymodules">
+              <span className="whymodules__label">WHY THE SET</span>
+              <p className="whymodules__copy">
+                Warm up in three homes, then comp a 30-second changes round. The round scores
+                the chord at each change and pays for close voice leading. The backing keeps
+                looping after the bell so you can keep practicing.
+              </p>
+            </div>
+
+            <ol className="stagepreview" aria-label="The set">
+              <li className="stagepreview__row">
+                <span className="stagepreview__num">01</span>
+                <span>
+                  <span className="stagepreview__type">WARM-UP</span>
+                  <span className="stagepreview__title">SCALE LAB · EAR · CHORDS · TURNAROUND</span>
+                  <span className="stagepreview__copy">
+                    Three homes on one keyboard — major, relative minor, blues — then four
+                    notes by ear, six seventh chords in order, and a I–vi–ii–V turnaround. Slow is
+                    fine.
                   </span>
-                  <span className="stagepreview__tag">{moduleMeta(module)}</span>
-                </li>
-              ))}
+                </span>
+                <span className="stagepreview__tag">T2 · SET</span>
+              </li>
+              <li className="stagepreview__row">
+                <span className="stagepreview__num">02</span>
+                <span>
+                  <span className="stagepreview__type">CHANGES</span>
+                  <span className="stagepreview__title">30 SECONDS · PLAY THE CHANGES</span>
+                  <span className="stagepreview__copy">
+                    Comp over the looping changes. The chord at each change scores; close
+                    voicings pay a voice-leading bonus. After 30 seconds the backing keeps
+                    going for practice.
+                  </span>
+                  <FoundationLink id="play-the-changes" />
+                </span>
+                <span className="stagepreview__tag">T3 · CHANGES</span>
+              </li>
             </ol>
 
             <div className="mission__actions">
               {action}
+              {!sessionActive && midi.supported && midi.connected ? (
+                <button
+                  type="button"
+                  className="linkbtn"
+                  onClick={() => startSession(plan?.source === 'llm' ? plan : null)}
+                >
+                  CLASSIC SESSION
+                </button>
+              ) : null}
               {session?.status && session.status !== 'active' ? (
                 <button type="button" className="btn btn--ghost" onClick={onReview}>
                   REVIEW LAST SESSION

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { keyDisplay } from '../data/scales.js'
 import { noteName } from '../data/diminishedChords.js'
-import { getRun } from '../session/api.js'
+import { deleteRun, getRun } from '../session/api.js'
 import * as store from '../session/store.js'
 
 const STAGE_LABELS = { warmup: 'WARM-UP', ear: 'EAR CHECK', hook: 'HOOK' }
@@ -17,6 +17,22 @@ export default function LedgerDetail({ id, onBack }) {
   const [run, setRun] = useState(() => store.loadCachedRun(id))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  async function remove() {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await deleteRun(id)
+      store.removeCachedRun(id)
+      onBack()
+    } catch (err) {
+      setDeleteError(err.message || 'delete failed')
+      setDeleting(false)
+    }
+  }
 
   useEffect(() => {
     let live = true
@@ -164,6 +180,29 @@ export default function LedgerDetail({ id, onBack }) {
       <div className="queuebar">
         <span>RUN {run.id}</span>
         <span>{manual ? 'OPEN SESSION' : `SEED ${run.seed}`}</span>
+      </div>
+
+      <div className="detail__danger">
+        {deleteError ? <p className="syncnote syncnote--queued">DELETE FAILED — {deleteError.toUpperCase()}</p> : null}
+        {confirming ? (
+          <div className="stagefoot">
+            <button
+              type="button"
+              className="btn btn--signal"
+              onClick={remove}
+              disabled={deleting}
+            >
+              {deleting ? 'DELETING…' : 'CONFIRM DELETE'}
+            </button>
+            <button type="button" className="btn" onClick={() => setConfirming(false)} disabled={deleting}>
+              CANCEL
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="btn btn--ghost" onClick={() => setConfirming(true)}>
+            DELETE THIS SESSION
+          </button>
+        )}
       </div>
     </section>
   )

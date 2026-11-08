@@ -43,6 +43,7 @@ const TEMPLATES = [
   { suffix: 'add9', intervals: [0, 2, 4, 7] },
   { suffix: 'madd9', intervals: [0, 2, 3, 7] },
   { suffix: '9', intervals: [0, 2, 4, 7, 10] },
+  { suffix: '7#9', intervals: [0, 3, 4, 7, 10] },
   { suffix: 'maj9', intervals: [0, 2, 4, 7, 11] },
   { suffix: 'm9', intervals: [0, 2, 3, 7, 10] },
   { suffix: '6/9', intervals: [0, 2, 4, 7, 9] },
@@ -91,7 +92,7 @@ export function analyzeNotes(notes) {
   if (pcs.length === 0) return { kind: 'empty' }
 
   if (pcs.length === 1) {
-    return { kind: 'note', name: noteName(pcs[0]) }
+    return { kind: 'note', name: noteName(pcs[0]), pcs }
   }
 
   const bassPc = ((sorted[0] % 12) + 12) % 12
@@ -104,12 +105,13 @@ export function analyzeNotes(notes) {
       kind: 'interval',
       name: `${noteName(a)} · ${noteName(b)}`,
       detail: interval,
+      pcs,
     }
   }
 
   const matches = matchChords(pcs)
   if (matches.length === 0) {
-    return { kind: 'unknown', notes: noteLabels }
+    return { kind: 'unknown', notes: noteLabels, pcs }
   }
 
   // Prefer the interpretation rooted on the bass note (i.e. root position);
@@ -123,5 +125,14 @@ export function analyzeNotes(notes) {
     .filter((m) => !(m.root === primary.root && m.suffix === primary.suffix))
     .map((m) => chordName(m.root, m.suffix))
 
-  return { kind: 'chord', name, equivalents, notes: noteLabels }
+  return {
+    kind: 'chord',
+    name,
+    equivalents,
+    notes: noteLabels,
+    pcs,
+    root: primary.root,
+    suffix: primary.suffix,
+    bass: bassPc,
+  }
 }

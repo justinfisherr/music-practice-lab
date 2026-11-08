@@ -116,3 +116,10 @@ The run is a 340px module rail plus the active module panel from 1024px. The rai
 The wheel face and inactive sectors use `--panel` with `--line` rules; the active sector is `--ink` fill with `--bg` text. The pointer is the only signal-red element on the wheel. Hub text follows the same ink/paper rule. `--wheel-spin: 2200ms` and `--wheel-ease: cubic-bezier(.12,.62,.06,1)` are the one authored motion: spin to the sector, then a 90ms pointer settle. Reduced motion skips the spin and places the sector directly. Teach copy uses `--teach-size: 12px` / `--teach-line: 1.5`; the run rail width is `--desk-rail: 340px`.
 
 Small red and green text stays on `--signal-ink` / `--ok-ink`. No new palettes, no nested cards, no emojis.
+
+## Crate
+
+THE CRATE is the level reward shelf: an ink box card with `OPEN LV n BOX`, then a reveal panel with the record sleeve and its artist card, and two shelves. RECORDS is a grid of framed sleeves with the one shine ring; ARTISTS is a grid of flippable card-stock cards. The reveal is the one authored motion (480ms panel, 560ms sleeve pull); reduced motion removes it and the artist card swaps faces without rotating.
+
+Rarity is a stamp, not a color wash: GRAIL uses the signal fill, STAPLE the ink fill, DEEP CUT the field. Collected level and metadata use `--signal-ink`; body copy stays ink or muted. Filters are a bordered paper panel with a 44px search, two selects, and rarity chips; the typeahead suggestions are a hard-ruled list under the field. Record detail keeps the ledger's ruled sections and back control. No new palettes, no nested cards, no emojis.
+

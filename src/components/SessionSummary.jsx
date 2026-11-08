@@ -3,6 +3,7 @@ import { keyDisplay } from '../data/scales.js'
 import { noteName } from '../data/diminishedChords.js'
 import { xpBreakdown } from '../../lib/xp.js'
 import { LevelUpBlock } from './Rank.jsx'
+import SetSummary from './SetSummary.jsx'
 
 const STAGE_LABELS = { warmup: 'WARM-UP', ear: 'EAR CHECK', hook: 'HOOK' }
 const XP_LABELS = [
@@ -48,10 +49,22 @@ export default function SessionSummary({ session, syncState, onDone, onAgain, on
           NO FINISHED SESSION YET.
           <br />
           <button type="button" className="linkbtn" onClick={onDone}>
-            BACK TO TONIGHT
+            BACK TO TODAY
           </button>
         </div>
       </section>
+    )
+  }
+
+  if (session.composition?.version === 4) {
+    return (
+      <SetSummary
+        session={session}
+        syncState={syncState}
+        onDone={onDone}
+        onAgain={onAgain}
+        onOpenWardrobe={onOpenWardrobe}
+      />
     )
   }
 

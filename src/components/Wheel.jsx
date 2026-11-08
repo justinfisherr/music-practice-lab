@@ -139,7 +139,7 @@ export default function Wheel({
   }
 
   const active = activeKey || tonightKey
-  const label = variant === 'bonus' ? 'BONUS' : 'TONIGHT'
+  const label = variant === 'bonus' ? 'BONUS' : 'TODAY'
 
   const activeIndex = MAJOR_KEYS.findIndex((k) => k.id === active)
   const activeKeyObj = MAJOR_KEYS[activeIndex] || MAJOR_KEYS[0]
@@ -205,7 +205,7 @@ export default function Wheel({
                         dominantBaseline="middle"
                         className={`wheel__tonight${isActive ? ' is-active' : ''}`}
                       >
-                        TONIGHT
+                        TODAY
                       </text>
                     ) : null}
                   </g>
@@ -254,7 +254,7 @@ export default function Wheel({
         </button>
         {variant === 'bonus' ? (
           <button type="button" className="btn" onClick={onTonight} disabled={disabled || spinning}>
-            BACK TO TONIGHT
+            BACK TO TODAY
           </button>
         ) : bonusKey && bonusKey !== tonightKey ? (
           <button
@@ -271,7 +271,7 @@ export default function Wheel({
       <p className="wheel__foot">
         SHADED BY FIFTHS FROM {keyDisplay(active)} · NEAR → FAR
         <br />
-        TONIGHT {keyDisplay(tonightKey)}
+        TODAY {keyDisplay(tonightKey)}
         {bonusKey && bonusKey !== tonightKey ? ` · BONUS ${keyDisplay(bonusKey)}` : ''}
       </p>
     </div>

@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --test src/session/"
+    "test": "node --test src/session/ src/data/"
   },
   "dependencies": {
     "pg": "^8.23.1",

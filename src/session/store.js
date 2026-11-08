@@ -64,6 +64,16 @@ export function moveToDead(run) {
   safeWrite(KEYS.dead, [...loadDead().slice(-(DEAD_CAP - 1)), run])
 }
 
+// Move dead-lettered runs back onto the queue so a fixed validator can retry
+// them. Returns how many were moved.
+export function requeueDead() {
+  const dead = loadDead()
+  if (!dead.length) return 0
+  saveQueue([...loadQueue(), ...dead])
+  safeWrite(KEYS.dead, [])
+  return dead.length
+}
+
 export function loadXp() {
   const value = Number(safeRead(KEYS.xp, 0))
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0
@@ -108,4 +118,11 @@ export function cacheRun(run) {
 
 export function loadCachedRun(id) {
   return cacheMap()[id] || null
+}
+
+export function removeCachedRun(id) {
+  const cache = cacheMap()
+  if (!cache[id]) return
+  delete cache[id]
+  safeWrite(KEYS.serverCache, cache)
 }

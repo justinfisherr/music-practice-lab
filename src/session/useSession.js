@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { composeLesson, composeSession } from './compose.js'
+import { composeLesson, composeSession, composeSet } from './compose.js'
 import { laDate, seedFor, tonightKey } from './tonight.js'
 import { postRun } from './api.js'
 import * as store from './store.js'
@@ -13,9 +13,10 @@ function newId() {
 // ledger can label a row without carrying the whole module definition.
 function makeStages(startedAt, modules = []) {
   return modules.map((module, index) => ({
-    id: String(module.type).toLowerCase(),
+    id: module.id || String(module.type).toLowerCase(),
     title: module.title,
     tier: module.tier,
+    detail: module.detail || null,
     position: index,
     attempts: 0,
     misses: 0,
@@ -50,6 +51,36 @@ export function makeSession(now = Date.now(), plan = null, keyIdOverride = null,
     currentStage: 0,
     xpBefore: store.loadXp(),
     stages: makeStages(startedAt, composition.modules),
+    composition,
+  }
+}
+
+// v4 THE SET: a warm-up stage plus the two card stages, always in that order.
+export function makeSetSession(now = Date.now(), cards = [], keyIdOverride = null) {
+  const date = laDate(new Date(now))
+  const tonightKeyId = tonightKey(date)
+  const keyId = keyIdOverride || tonightKeyId
+  const seed = seedFor(date, keyId)
+  const startedAt = new Date(now).toISOString()
+  const composition = composeSet({ date, keyId, seed, cards })
+  return {
+    id: newId(),
+    kind: 'graded',
+    scope: 'session',
+    variant: 'set',
+    keySource: 'tonight',
+    tonightKeyId,
+    date,
+    keyId,
+    seed,
+    status: 'active',
+    startedAt,
+    endedAt: null,
+    pausedAt: null,
+    pausedMs: 0,
+    currentStage: 0,
+    xpBefore: store.loadXp(),
+    stages: makeStages(startedAt, composition.stages),
     composition,
   }
 }
@@ -134,6 +165,16 @@ export function reduce(state, action) {
         attempts: stage.attempts + 1,
         misses: stage.misses + (action.miss ? 1 : 0),
       }))
+    case 'detail':
+      return withStage(state, action.stageId, (stage) => ({
+        ...stage,
+        detail: { ...(stage.detail || {}), ...(action.detail || {}) },
+      }))
+    case 'goto': {
+      if (state.status !== 'active') return state
+      const index = Math.max(0, Math.min(action.index, state.stages.length - 1))
+      return { ...state, currentStage: index }
+    }
     case 'advance': {
       if (state.status !== 'active') return state
       const now = new Date(action.now).toISOString()
@@ -217,6 +258,7 @@ export function toPayload(session) {
       attempts: stage.attempts,
       misses: stage.misses,
       passed: stage.passed,
+      detail: stage.detail || null,
       startedAt: stage.startedAt,
       finishedAt: stage.finishedAt,
     })),
@@ -239,6 +281,7 @@ export function toPayload(session) {
         attempts: stage.attempts,
         misses: stage.misses,
         passed: stage.passed,
+        detail: stage.detail || null,
       })),
     },
   }
@@ -351,6 +394,15 @@ export function useSession() {
     [commit],
   )
 
+  const startSet = useCallback(
+    (cards, keyId = null) => {
+      const next = makeSetSession(Date.now(), cards, keyId)
+      commit(next)
+      return next
+    },
+    [commit],
+  )
+
   const startLesson = useCallback(
     (type, keyId = null) => {
       const next = makeLessonSession(Date.now(), type, keyId)
@@ -365,8 +417,18 @@ export function useSession() {
     [dispatch],
   )
 
+  const recordDetail = useCallback(
+    (stageId, detail) => dispatch({ type: 'detail', stageId, detail }),
+    [dispatch],
+  )
+
   const advanceStage = useCallback(
     (passed = true) => dispatch({ type: 'advance', now: Date.now(), passed }),
+    [dispatch],
+  )
+
+  const goToStage = useCallback(
+    (index) => dispatch({ type: 'goto', index }),
     [dispatch],
   )
 
@@ -385,6 +447,14 @@ export function useSession() {
     },
     [dispatch, flushQueue],
   )
+
+  const retrySync = useCallback(() => {
+    const moved = store.requeueDead()
+    if (moved) {
+      setSync((prev) => ({ ...prev, dead: 0, pending: store.loadQueue().length }))
+    }
+    flushQueue()
+  }, [flushQueue])
 
   const finish = useCallback(() => finalize('done'), [finalize])
   const abandon = useCallback(() => finalize('abandoned'), [finalize])
@@ -413,16 +483,20 @@ export function useSession() {
   return {
     session,
     start,
+    startSet,
     startManual,
     startLesson,
     recordAttempt,
+    recordDetail,
     advanceStage,
+    goToStage,
     finish,
     abandon,
     reset,
     pause,
     resume,
     flushQueue,
+    retrySync,
     syncState: sync,
   }
 }

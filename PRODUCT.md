@@ -25,6 +25,9 @@ Every finished session earns XP, derived server-side from the stages that passed
 
 The ear and hook phrases can be composed by an LLM through /api/plan. Generation is best-effort and time-boxed on both ends: a valid plan is used, and any delay, missing key, or malformed response falls back to the deterministic local composition, so START never waits for the network.
 
+The CRATE spends level progress on loot: each rank level earns one box, and a box contains a record sleeve plus the artist card for that record. The crate is local to the device, uses the bundled jazz dataset, and reads public album art and artist portraits best-effort.
+
+
 ## Brand Commitments
 Brutalist music lab: warm paper, black rules, hard offset shadows, signal red, monospace type. No emojis.
 

@@ -43,7 +43,7 @@ export function useNoteSequence({
       if (!allowRepeats && lastRef.current.pc === pc && now - lastRef.current.at < dedupeMs) return
       lastRef.current = { pc, at: now }
       countRef.current += 1
-      noteRef.current?.(pc)
+      noteRef.current?.(pc, note)
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => {
         timerRef.current = null

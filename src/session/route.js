@@ -1,4 +1,4 @@
-export const VIEWS = ['session', 'lessons', 'freeplay', 'stats']
+export const VIEWS = ['session', 'lessons', 'freeplay', 'crate', 'stats']
 export const SESSION_SUBS = ['run', 'summary']
 
 export function parseHash(hash = typeof window === 'undefined' ? '' : window.location.hash) {
@@ -16,8 +16,16 @@ export function parseHash(hash = typeof window === 'undefined' ? '' : window.loc
     }
   }
 
+  if (parts[0] === 'crate') {
+    return { view: 'crate', id: parts[1] ? decodeURIComponent(parts[1]) : null }
+  }
+
   if (parts[0] === 'lessons') {
-    return { view: 'lessons', type: query.get('type') || null }
+    return {
+      view: 'lessons',
+      type: query.get('type') || null,
+      foundation: query.get('foundation') || null,
+    }
   }
 
   if (parts[0] === 'session') {

@@ -1,6 +1,7 @@
 import pg from 'pg'
 import { deriveXp } from '../lib/xp.js'
 import { MODULE_IDS } from '../lib/modules.js'
+import { CARD_STAGE_IDS, LEGACY_STAGE_IDS } from '../lib/cards.js'
 
 // Public, no-account session log. Auth is intentionally absent; the write
 // surface is protected by a CORS allowlist, strict shape validation, a 32KB
@@ -31,7 +32,8 @@ const KEY_IDS = new Set([
 // v3 module ids are lowercased module types; v2 used warmup/ear/hook. The
 // allowlist is the contract with the client composer, not a regex.
 const MODULE_ID_SET = new Set(MODULE_IDS)
-const STAGE_IDS = new Set(['warmup', 'ear', 'hook', ...MODULE_IDS])
+const CARD_STAGE_ID_SET = new Set([...CARD_STAGE_IDS, ...LEGACY_STAGE_IDS])
+const STAGE_IDS = new Set(['warmup', 'ear', 'hook', 'jam', ...MODULE_IDS, ...CARD_STAGE_ID_SET])
 const SCOPES = new Set(['session', 'lesson', 'open'])
 const MAX_BODY = 32 * 1024
 const MAX_PAYLOAD = 16 * 1024
@@ -156,7 +158,7 @@ function cors(req, res) {
   const origin = req.headers.origin
   if (origin && ALLOWED.has(origin)) res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Vary', 'Origin')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   res.setHeader('Access-Control-Max-Age', '86400')
 }
@@ -222,7 +224,7 @@ function intBetween(value, min, max) {
   return Number.isInteger(value) && value >= min && value <= max
 }
 
-function validate(input) {
+export function validate(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid()
   if (typeof input.id !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(input.id)) throw invalid()
   if (!isoDate(input.date)) throw invalid()
@@ -249,9 +251,11 @@ function validate(input) {
     if (typeof stage.id !== 'string' || !STAGE_IDS.has(stage.id)) throw invalid()
     if (stage.tier != null && ![1, 2, 3].includes(stage.tier)) throw invalid()
     if (v3 && MODULE_ID_SET.has(stage.id) && !intBetween(stage.tier, 1, 3)) throw invalid()
+    if (CARD_STAGE_ID_SET.has(stage.id) && stage.tier !== 3) throw invalid()
+    if (stage.id === 'jam' && stage.tier !== 3) throw invalid()
     if (!intBetween(stage.position, 0, 5)) throw invalid()
-    if (!intBetween(stage.attempts, 0, 20)) throw invalid()
-    if (!intBetween(stage.misses, 0, 200)) throw invalid()
+    if (!intBetween(stage.attempts, 0, 500)) throw invalid()
+    if (!intBetween(stage.misses, 0, 1000)) throw invalid()
     if (typeof stage.passed !== 'boolean') throw invalid()
     if (stage.startedAt != null && !isoTime(stage.startedAt)) throw invalid()
     if (stage.finishedAt != null && !isoTime(stage.finishedAt)) throw invalid()
@@ -355,7 +359,7 @@ export default async function handler(req, res) {
           `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                   ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
                   module_count, payload->>'focus' AS focus, payload->>'scope' AS scope,
-                  payload#>'{composition,modules}' AS module_types, payload
+                  COALESCE(payload#>'{composition,modules}', payload#>'{composition,stages}') AS module_types, payload
              FROM practice.sessions WHERE id = $1`,
           [String(id)],
         )
@@ -387,7 +391,7 @@ export default async function handler(req, res) {
         `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                 ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
                 module_count, payload->>'focus' AS focus, payload->>'scope' AS scope,
-                payload#>'{composition,modules}' AS module_types
+                COALESCE(payload#>'{composition,modules}', payload#>'{composition,stages}') AS module_types
            FROM practice.sessions
           ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
           ORDER BY session_date DESC, started_at DESC
@@ -399,6 +403,14 @@ export default async function handler(req, res) {
         hasMore: rows.length > limit,
         meta: { totalXp: await totalXp(pool) },
       })
+    }
+
+    if (req.method === 'DELETE') {
+      const id = req.query?.id
+      if (typeof id !== 'string' || !id || id.length > 200) throw invalid()
+      const { rowCount } = await pool.query('DELETE FROM practice.sessions WHERE id = $1', [id])
+      if (!rowCount) return write(res, 404, { error: 'not_found' })
+      return write(res, 200, { deleted: id, meta: { totalXp: await totalXp(pool) } })
     }
 
     if (req.method === 'POST') {
