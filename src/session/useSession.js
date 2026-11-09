@@ -197,14 +197,24 @@ export function reduce(state, action) {
     }
     case 'pause':
       if (state.status !== 'active' || state.pausedAt) return state
-      return { ...state, pausedAt: new Date(action.now).toISOString() }
-    case 'resume':
+      return {
+        ...state,
+        pausedAt: new Date(action.now).toISOString(),
+        pausedBy: action.reason || 'manual',
+      }
+    case 'resume': {
       if (state.status !== 'active' || !state.pausedAt) return state
+      // An 'auto' resume (tab return, MIDI reconnect) never lifts a manual pause.
+      if ((action.reason || 'manual') !== 'manual' && (state.pausedBy || 'auto') !== action.reason) {
+        return state
+      }
       return {
         ...state,
         pausedAt: null,
+        pausedBy: null,
         pausedMs: state.pausedMs + Math.max(0, action.now - Date.parse(state.pausedAt)),
       }
+    }
     case 'finish': {
       if (state.status !== 'active') return state
       const now = action.now
@@ -432,8 +442,14 @@ export function useSession() {
     [dispatch],
   )
 
-  const pause = useCallback(() => dispatch({ type: 'pause', now: Date.now() }), [dispatch])
-  const resume = useCallback(() => dispatch({ type: 'resume', now: Date.now() }), [dispatch])
+  const pause = useCallback(
+    (reason = 'manual') => dispatch({ type: 'pause', now: Date.now(), reason }),
+    [dispatch],
+  )
+  const resume = useCallback(
+    (reason = 'manual') => dispatch({ type: 'resume', now: Date.now(), reason }),
+    [dispatch],
+  )
 
   const finalize = useCallback(
     (status) => {
@@ -473,8 +489,8 @@ export function useSession() {
   // Hidden tabs do not accumulate practice time.
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') pause()
-      else resume()
+      if (document.visibilityState === 'hidden') pause('auto')
+      else resume('auto')
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)

@@ -28,6 +28,29 @@ test('manual duration excludes paused time', () => {
   assert.equal(final.durationMs, 240_000)
 })
 
+test('manual pause survives an automatic resume', () => {
+  const paused = reduce(makeManualSession(START, 'FREE PLAY'), {
+    type: 'pause',
+    now: START + 60_000,
+    reason: 'manual',
+  })
+  const afterAuto = reduce(paused, { type: 'resume', now: START + 120_000, reason: 'auto' })
+  assert.equal(afterAuto.pausedAt, paused.pausedAt)
+  const resumed = reduce(afterAuto, { type: 'resume', now: START + 180_000 })
+  assert.equal(resumed.pausedAt, null)
+})
+
+test('an automatic pause is lifted by an automatic resume', () => {
+  const paused = reduce(makeManualSession(START, 'FREE PLAY'), {
+    type: 'pause',
+    now: START + 60_000,
+    reason: 'auto',
+  })
+  const resumed = reduce(paused, { type: 'resume', now: START + 120_000, reason: 'auto' })
+  assert.equal(resumed.pausedAt, null)
+  assert.equal(resumed.pausedMs, 60_000)
+})
+
 test('graded sessions still report kind graded', () => {
   assert.equal(toPayload(makeSession(START)).kind, 'graded')
 })

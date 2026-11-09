@@ -45,7 +45,8 @@ export default function SessionRun({ practice, onFinished, onExit }) {
 
   const active = session?.status === 'active'
   const lost = active && midi.supported && !midi.connected
-  const pausedForInput = !midi.connected || hidden
+  const paused = Boolean(session?.pausedAt)
+  const pausedForInput = !midi.connected || hidden || paused
 
   useEffect(() => {
     if (!active) return
@@ -61,8 +62,8 @@ export default function SessionRun({ practice, onFinished, onExit }) {
 
   useEffect(() => {
     if (!active || !midi.supported) return
-    if (midi.connected) resume()
-    else pause()
+    if (midi.connected) resume('auto')
+    else pause('auto')
   }, [active, midi.supported, midi.connected, pause, resume])
 
   // Moving to the next module closes any read-only review.
@@ -112,6 +113,13 @@ export default function SessionRun({ practice, onFinished, onExit }) {
           {clock(elapsed)}
         </span>
         <div className="sessionbar__btns">
+          <button
+            type="button"
+            className="sessionbar__btn"
+            onClick={() => (paused ? resume() : pause())}
+          >
+            {paused ? 'RESUME' : 'PAUSE'}
+          </button>
           <button type="button" className="sessionbar__btn" onClick={toggleSound}>
             SOUND {sound ? 'ON' : 'OFF'}
           </button>
@@ -135,6 +143,12 @@ export default function SessionRun({ practice, onFinished, onExit }) {
           </div>
         ) : null}
       </div>
+
+      {paused ? (
+        <p className="notestamp notestamp--lost" role="status">
+          PAUSED — THE CLOCK IS STOPPED AND NOTHING IS GRADED. RESUME WHEN YOU&apos;RE BACK.
+        </p>
+      ) : null}
 
       {!midi.supported ? (
         <p className="notestamp">
