@@ -16,6 +16,7 @@ import {
   degreeRootPc,
   emptyConfidence,
   pickRapidDegree,
+  rapidChordStep,
   scoreChord,
   seventhByDegree,
   seventhQuality,
@@ -73,6 +74,8 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const chordNotesRef = useRef([])
   const tailRef = useRef({ pending: false, capAt: 0 })
   const tailTimerRef = useRef(null)
+  const revealTimerRef = useRef(null)
+  const solvedRef = useRef(false)
   const chordMidiRef = useRef([])
   const rapidDegreeRef = useRef(1)
   const confidenceRef = useRef(emptyConfidence())
@@ -101,6 +104,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
       if (timerRef.current) clearTimeout(timerRef.current)
       if (barTimerRef.current) clearTimeout(barTimerRef.current)
       if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
+      if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
     },
     [],
   )
@@ -143,8 +147,12 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     if (next === phase) return
     if (timerRef.current) clearTimeout(timerRef.current)
     if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
+    stopBar()
     tailTimerRef.current = null
+    revealTimerRef.current = null
     tailRef.current = { pending: false, capAt: 0 }
+    solvedRef.current = false
     setArmed(false)
     setChordRun(false)
     chordRunRef.current = false
@@ -189,13 +197,17 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   }
 
   function resetChordState(next = phase) {
+    stopBar()
     chordIndexRef.current = 0
     chordCleanRef.current = 0
     chordRunRef.current = false
     chordNotesRef.current = []
     tailRef.current = { pending: false, capAt: 0 }
+    solvedRef.current = false
     if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
     tailTimerRef.current = null
+    revealTimerRef.current = null
     setChordIndex(0)
     setChordClean(0)
     setChordDone(false)
@@ -223,7 +235,9 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   function drawRapidDegree() {
     const degree = pickRapidDegree(Math.random, confidenceRef.current)
     rapidDegreeRef.current = degree
+    solvedRef.current = false
     setRapidDegree(degree)
+    setChordMsg('')
     chordNotesRef.current = []
     chordMidiRef.current = []
     setPlayed([])
@@ -235,15 +249,14 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     barTimerRef.current = null
   }
 
-  // Any accepted note restarts the bar from the top; when it empties, the chord
-  // is graded as missed and the drill moves on.
+  // Every new chord tone restarts the bar from the top. When it empties the
+  // prompt is scored as it stands and the drill moves on.
   function restartBar() {
     stopBar()
     setBarKey((value) => value + 1)
     setBarLive(true)
     barTimerRef.current = setTimeout(() => {
-      barTimerRef.current = null
-      finishRapid(false, false, false)
+      expireRapid()
     }, CHORD_BAR_MS)
   }
 
@@ -299,50 +312,72 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     gradeRef.current = false
   }
 
-  // A clean chord pays the base times the streak. A stray note is a miss with a
-  // small penalty; an empty bar is a miss without one. Either way, next chord.
-  function finishRapid(clean, penalty = true, waitForTail = true) {
-    if (gradeRef.current) return
-    gradeRef.current = true
-    stopBar()
+  // The bar is the clock: a solved chord scores once and waits for it to run
+  // out. A stray note, or an empty bar on an unsolved chord, moves on.
+  function solveRapid() {
+    if (solvedRef.current) return
     const degree = rapidDegreeRef.current
-    const target = seventhByDegree(keyId, degree)
     const rootPc = degreeRootPc(keyId, degree)
     const bassPc = chordMidiRef.current.length ? Math.min(...chordMidiRef.current) % 12 : rootPc
     const outcome = scoreChord({
-      clean,
+      clean: true,
       combo: comboRef.current,
-      inversion: clean && bassPc !== rootPc,
-      penalty,
+      inversion: bassPc !== rootPc,
     })
-    recordAttempt('warmup', !clean)
+    recordAttempt('warmup', false)
+    solvedRef.current = true
     comboRef.current = outcome.combo
     bestComboRef.current = Math.max(bestComboRef.current, outcome.combo)
-    scoreRef.current = Math.max(0, scoreRef.current + outcome.points)
+    scoreRef.current += outcome.points
     answeredRef.current += 1
-    if (clean) correctRef.current += 1
-    confidenceRef.current = bumpConfidence(confidenceRef.current, degree, clean)
+    correctRef.current += 1
+    confidenceRef.current = bumpConfidence(confidenceRef.current, degree, true)
     setCombo(outcome.combo)
     setScore(scoreRef.current)
     setChordClean(correctRef.current)
     setConfidence(confidenceRef.current)
-    if (outcome.points) pop(outcome.points, clean ? 'CLEAN' : 'SLIPPED')
-    setChordMsg(
-      clean
-        ? `${ROMAN[degree - 1]} CLEAN · +${outcome.points}`
-        : `THE ${ROMAN[degree - 1]} IS ${chordFor(degree)} · NEXT`,
-    )
-    if (!clean) {
-      setRevealChord(chordFor(degree))
-      playChord(target)
-      setTimeout(() => setRevealChord(null), 1600)
-    }
-    gradeRef.current = false
+    pop(outcome.points, 'CLEAN')
+    setChordMsg(`${ROMAN[degree - 1]} CLEAN · +${outcome.points} · STAY ON IT`)
+    setRevealChord(null)
+  }
+
+  function missRapid(penalty) {
+    const degree = rapidDegreeRef.current
+    const target = seventhByDegree(keyId, degree)
+    const outcome = scoreChord({ clean: false, combo: comboRef.current, penalty })
+    recordAttempt('warmup', true)
+    comboRef.current = 0
+    scoreRef.current = Math.max(0, scoreRef.current + outcome.points)
+    answeredRef.current += 1
+    confidenceRef.current = bumpConfidence(confidenceRef.current, degree, false)
+    setCombo(0)
+    setScore(scoreRef.current)
+    setConfidence(confidenceRef.current)
+    if (outcome.points) pop(outcome.points, 'SLIPPED')
+    setChordMsg(`THE ${ROMAN[degree - 1]} IS ${chordFor(degree)} · NEXT`)
+    setRevealChord(chordFor(degree))
+    playChord(target)
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
+    revealTimerRef.current = setTimeout(() => setRevealChord(null), 1600)
+    chordNotesRef.current = []
+    chordMidiRef.current = []
+    setPlayed([])
+    advanceRapid()
+  }
+
+  function advanceRapid() {
+    stopBar()
     setBarLive(false)
     // Hold the next chord until the player's hand stops, so the tail of a long
     // arpeggio cannot be graded against the chord that follows it.
-    if (waitForTail) scheduleNextChord()
-    else drawRapidDegree()
+    scheduleNextChord()
+  }
+
+  function expireRapid() {
+    barTimerRef.current = null
+    if (!chordRunRef.current) return
+    if (solvedRef.current) advanceRapid()
+    else missRapid(false)
   }
 
   function scheduleNextChord() {
@@ -361,28 +396,36 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
 
   function handleChordNote(pc, note) {
     if (disabled || !chordRunRef.current || gradeRef.current) return
-    // Still waiting for the last chord's tail: swallow the note, keep waiting.
+    // Still waiting for the last chord's hand to stop: swallow, keep waiting.
     if (tailRef.current.pending) {
       scheduleNextChord()
       return
     }
-    const degree = phase === 'rapid' ? rapidDegreeRef.current : sequence[chordIndexRef.current]
+    if (phase === 'rapid') {
+      const target = seventhByDegree(keyId, rapidDegreeRef.current)
+      const step = rapidChordStep({ target, played: chordNotesRef.current, pc })
+      if (step.kind === 'ignore') return
+      if (step.kind === 'miss') {
+        missRapid(true)
+        return
+      }
+      chordNotesRef.current = step.played
+      if (Number.isFinite(note)) chordMidiRef.current = [...chordMidiRef.current, note]
+      setPlayed(step.played)
+      restartBar()
+      if (step.solved) solveRapid()
+      return
+    }
+    const degree = sequence[chordIndexRef.current]
     const target = seventhByDegree(keyId, degree)
     if (!target.includes(pc)) {
-      if (phase === 'rapid') finishRapid(false)
-      else finishChordPrompt(false)
+      finishChordPrompt(false)
       return
     }
     if (chordNotesRef.current.includes(pc)) return
     chordNotesRef.current = [...chordNotesRef.current, pc]
-    if (Number.isFinite(note)) chordMidiRef.current = [...chordMidiRef.current, note]
     setPlayed(chordNotesRef.current)
-    if (chordNotesRef.current.length >= target.length) {
-      if (phase === 'rapid') finishRapid(true)
-      else finishChordPrompt(true)
-      return
-    }
-    if (phase === 'rapid') restartBar()
+    if (chordNotesRef.current.length >= target.length) finishChordPrompt(true)
   }
 
   function handleChordSilence() {
@@ -397,8 +440,8 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
       if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
       tailTimerRef.current = null
       tailRef.current = { pending: false, capAt: 0 }
-      setChordMsg('SKIPPED.')
       drawRapidDegree()
+      setChordMsg('SKIPPED.')
       return
     }
     const next = chordIndexRef.current + 1
@@ -512,7 +555,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
             : phase === 'ear'
               ? 'Four notes. Hear them once, then play them back in order.'
               : phase === 'rapid'
-                ? 'One chord at a time, drawn toward whichever degree you are least sure of. Play the chord and the bar runs; every key restarts it. Fill all seven degrees to move on.'
+                ? 'One chord at a time, drawn toward whichever degree you are least sure of. The bar starts on your first note and every chord tone keeps it alive. A clean chord scores and you comp it until the bar runs out.'
                 : 'I–vi–ii–V. The chord names stay on screen. Comp each one clean to move on.'}
         </p>
       </div>
@@ -703,13 +746,13 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                 ))}
               </div>
               <div className="rapidbar">
-                <span>ALL KEYS RESET THE BAR</span>
+                <span>CHORD TONES RESET THE BAR</span>
                 <span>A SLIPPED NOTE COSTS {Math.abs(CHORD_MISS_POINTS)}</span>
               </div>
               <p className="hintline">
                 {chordMsg ||
                   (barLive
-                    ? 'KEEP PLAYING — THE BAR IS RUNNING.'
+                    ? 'KEEP COMPING — THE BAR RUNS OUT TO MOVE ON.'
                     : 'PLAY THE CHORD TO START THE BAR.')}
               </p>
               <div className="stagefoot">

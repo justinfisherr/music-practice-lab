@@ -16,6 +16,7 @@ import {
   phrasePcs,
   pickRapidDegree,
   PLAY_CHANGES,
+  rapidChordStep,
   rapidPrompts,
   scoreChord,
   RAPID_COUNT,
@@ -125,6 +126,38 @@ test('the next chord is drawn toward the least confident degree', () => {
   const flat = Array(7).fill(0)
   for (let draw = 0; draw < 700; draw++) flat[pickRapidDegree(rng, Array(7).fill(1)) - 1] += 1
   assert.ok(flat.every((count) => count > 60))
+})
+
+test('rapid chord: tones accumulate, the last one solves, and solving does not advance', () => {
+  const target = seventhByDegree('C', 1)
+  let step = rapidChordStep({ target, played: [], pc: 0 })
+  assert.deepEqual([step.kind, step.solved, step.played], ['next', false, [0]])
+  step = rapidChordStep({ target, played: step.played, pc: 4 })
+  assert.deepEqual([step.kind, step.played], ['next', [0, 4]])
+  step = rapidChordStep({ target, played: step.played, pc: 7 })
+  assert.deepEqual([step.kind, step.solved], ['next', false])
+  step = rapidChordStep({ target, played: step.played, pc: 11 })
+  assert.deepEqual([step.kind, step.solved, step.played], ['next', true, [0, 4, 7, 11]])
+  // A repeat of a tone already held leaves `played` alone.
+  const repeat = rapidChordStep({ target, played: [0, 4], pc: 4 })
+  assert.equal(repeat.kind, 'next')
+  assert.deepEqual(repeat.played, [0, 4])
+})
+
+test('rapid chord: a solved prompt ignores every note and only the bar advances it', () => {
+  const target = seventhByDegree('C', 1)
+  const solved = [0, 4, 7, 11]
+  assert.equal(rapidChordStep({ target, played: solved, pc: 4 }).kind, 'ignore')
+  assert.equal(rapidChordStep({ target, played: solved, pc: 2 }).kind, 'ignore')
+  assert.equal(rapidChordStep({ target, played: solved, pc: null }).kind, 'advance')
+  // Unsolved: a stray note is a miss, and so is an empty bar.
+  assert.equal(rapidChordStep({ target, played: [0, 4], pc: 2 }).kind, 'miss')
+  assert.equal(rapidChordStep({ target, played: [], pc: null }).kind, 'miss')
+})
+
+test('a no-penalty miss scores nothing and still breaks the combo', () => {
+  assert.deepEqual(scoreChord({ clean: false, combo: 5, penalty: false }), { points: 0, combo: 0 })
+  assert.equal(scoreChord({ clean: false, combo: 5, penalty: true }).points, CHORD_MISS_POINTS)
 })
 
 test('the turnaround is I–vi–ii–V', () => {

@@ -154,19 +154,34 @@ export function rapidPrompts(seed = 0, keyId = 'C', count = 40) {
 
 export const RAPID_COUNT = 40
 export const INVERSION_BONUS = 50
-// Rapid-fire chord drill. Each prompt has a countdown bar that starts on the
-// first note and restarts on every note; a clean chord fills that degree's
-// confidence, a slip or an empty bar takes it back down.
+// Rapid-fire chord drill. The bar is the only clock: the first note starts it,
+// every new chord tone restarts it, and it runs out to move on. Hitting all the
+// tones scores the chord but does not advance it.
 export const CHORD_BAR_MS = 4000
 export const CHORD_CLEAN_POINTS = 100
 export const CHORD_MISS_POINTS = -25
 export const CONFIDENCE_STEP = 0.25
 export const CONFIDENCE_FLOOR_WEIGHT = 0.15
-// After a chord lands, the next prompt waits for the player's hand to stop:
-// this much silence advances it, and the cap keeps a fast comping hand from
-// stalling the drill. Waiting beats guessing which notes are the tail.
+// Moving to the next prompt waits for the player's hand to stop: this much
+// silence advances it, and the cap keeps a fast comping hand from stalling the
+// drill. Waiting beats guessing which notes are the tail.
 export const CHORD_TAIL_SILENCE_MS = 600
 export const CHORD_TAIL_CAP_MS = 1800
+
+// One step of a rapid-fire prompt. `pc` is the incoming pitch class, or null
+// for "the bar ran out". Kinds: 'next' is a chord tone (score it when solved),
+// 'ignore' is anything played after the chord is already solved, 'miss' costs
+// points and advances, 'advance' moves on without scoring.
+export function rapidChordStep({ target = [], played = [], pc = null } = {}) {
+  const tones = Array.isArray(target) ? target : []
+  const have = Array.isArray(played) ? played : []
+  const solved = tones.length > 0 && have.length >= tones.length
+  if (pc == null) return { kind: solved ? 'advance' : 'miss', solved, played: have }
+  if (solved) return { kind: 'ignore', solved, played: have }
+  if (!tones.includes(pc)) return { kind: 'miss', solved, played: have }
+  const next = have.includes(pc) ? have : [...have, pc]
+  return { kind: 'next', solved: next.length >= tones.length, played: next }
+}
 
 export function emptyConfidence() {
   return Array(7).fill(0)
