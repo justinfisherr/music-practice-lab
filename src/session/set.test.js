@@ -8,12 +8,10 @@ import {
   boogiePcs,
   buildJamDegrees,
   bumpConfidence,
-  CHORD_TAIL_MS,
   chordTonePc,
   emptyConfidence,
   fifthPc,
   fiveNoteRangePcs,
-  isChordTailNote,
   JAM_DEGREES,
   phrasePcs,
   pickRapidDegree,
@@ -131,13 +129,6 @@ test('the next chord is drawn toward the least confident degree', () => {
 
 test('the turnaround is I–vi–ii–V', () => {
   assert.deepEqual(TURNAROUND_DEGREES, [1, 6, 2, 5])
-})
-
-test('a chord tail note is ignored within its grace window', () => {
-  const previousPcs = [0, 4, 7, 11]
-  assert.equal(isChordTailNote({ pc: 4, previousPcs, until: CHORD_TAIL_MS, now: 1100 }), true)
-  assert.equal(isChordTailNote({ pc: 4, previousPcs, until: CHORD_TAIL_MS, now: CHORD_TAIL_MS + 1 }), false)
-  assert.equal(isChordTailNote({ pc: 2, previousPcs, until: CHORD_TAIL_MS, now: 1100 }), false)
 })
 
 const bars = [

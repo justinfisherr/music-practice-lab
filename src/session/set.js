@@ -157,19 +157,16 @@ export const INVERSION_BONUS = 50
 // Rapid-fire chord drill. Each prompt has a countdown bar that starts on the
 // first note and restarts on every note; a clean chord fills that degree's
 // confidence, a slip or an empty bar takes it back down.
-export const CHORD_BAR_MS = 2500
+export const CHORD_BAR_MS = 4000
 export const CHORD_CLEAN_POINTS = 100
 export const CHORD_MISS_POINTS = -25
 export const CONFIDENCE_STEP = 0.25
 export const CONFIDENCE_FLOOR_WEIGHT = 0.15
-// After a chord lands, its own notes keep coming on the way down. For a short
-// window the next prompt ignores those pitches, so an up-and-down arpeggio
-// cannot slip the chord that follows it. Any other pitch ends the grace.
-export const CHORD_TAIL_MS = 2000
-
-export function isChordTailNote({ pc, previousPcs = [], until = 0, now = 0 } = {}) {
-  return now < until && previousPcs.includes(pc)
-}
+// After a chord lands, the next prompt waits for the player's hand to stop:
+// this much silence advances it, and the cap keeps a fast comping hand from
+// stalling the drill. Waiting beats guessing which notes are the tail.
+export const CHORD_TAIL_SILENCE_MS = 600
+export const CHORD_TAIL_CAP_MS = 1800
 
 export function emptyConfidence() {
   return Array(7).fill(0)

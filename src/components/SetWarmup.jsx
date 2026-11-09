@@ -11,10 +11,10 @@ import {
   bumpConfidence,
   CHORD_BAR_MS,
   CHORD_MISS_POINTS,
-  CHORD_TAIL_MS,
+  CHORD_TAIL_CAP_MS,
+  CHORD_TAIL_SILENCE_MS,
   degreeRootPc,
   emptyConfidence,
-  isChordTailNote,
   pickRapidDegree,
   scoreChord,
   seventhByDegree,
@@ -71,7 +71,8 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const chordCleanRef = useRef(0)
   const chordRunRef = useRef(false)
   const chordNotesRef = useRef([])
-  const tailRef = useRef({ active: false, pcs: [], until: 0 })
+  const tailRef = useRef({ pending: false, capAt: 0 })
+  const tailTimerRef = useRef(null)
   const chordMidiRef = useRef([])
   const rapidDegreeRef = useRef(1)
   const confidenceRef = useRef(emptyConfidence())
@@ -99,6 +100,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current)
       if (barTimerRef.current) clearTimeout(barTimerRef.current)
+      if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
     },
     [],
   )
@@ -140,6 +142,9 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   function goTo(next) {
     if (next === phase) return
     if (timerRef.current) clearTimeout(timerRef.current)
+    if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
+    tailTimerRef.current = null
+    tailRef.current = { pending: false, capAt: 0 }
     setArmed(false)
     setChordRun(false)
     chordRunRef.current = false
@@ -188,7 +193,9 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     chordCleanRef.current = 0
     chordRunRef.current = false
     chordNotesRef.current = []
-    tailRef.current = { active: false, pcs: [], until: 0 }
+    tailRef.current = { pending: false, capAt: 0 }
+    if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
+    tailTimerRef.current = null
     setChordIndex(0)
     setChordClean(0)
     setChordDone(false)
@@ -236,7 +243,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     setBarLive(true)
     barTimerRef.current = setTimeout(() => {
       barTimerRef.current = null
-      finishRapid(false, false)
+      finishRapid(false, false, false)
     }, CHORD_BAR_MS)
   }
 
@@ -262,8 +269,6 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     const degree = sequence[index]
     const target = seventhByDegree(keyId, degree)
     recordAttempt('warmup', !correct)
-    // The chord's own notes are still on the way down; ignore them briefly.
-    tailRef.current = { active: true, pcs: target, until: performance.now() + CHORD_TAIL_MS }
 
     if (correct) {
       const clean = chordCleanRef.current + 1
@@ -296,7 +301,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
 
   // A clean chord pays the base times the streak. A stray note is a miss with a
   // small penalty; an empty bar is a miss without one. Either way, next chord.
-  function finishRapid(clean, penalty = true) {
+  function finishRapid(clean, penalty = true, waitForTail = true) {
     if (gradeRef.current) return
     gradeRef.current = true
     stopBar()
@@ -333,18 +338,33 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
       setTimeout(() => setRevealChord(null), 1600)
     }
     gradeRef.current = false
-    // This chord's own notes are still coming down; ignore them for a moment.
-    tailRef.current = { active: true, pcs: target, until: performance.now() + CHORD_TAIL_MS }
-    drawRapidDegree()
+    setBarLive(false)
+    // Hold the next chord until the player's hand stops, so the tail of a long
+    // arpeggio cannot be graded against the chord that follows it.
+    if (waitForTail) scheduleNextChord()
+    else drawRapidDegree()
+  }
+
+  function scheduleNextChord() {
+    const now = performance.now()
+    if (!tailRef.current.pending) {
+      tailRef.current = { pending: true, capAt: now + CHORD_TAIL_CAP_MS }
+    }
+    if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
+    const wait = Math.min(CHORD_TAIL_SILENCE_MS, Math.max(0, tailRef.current.capAt - now))
+    tailTimerRef.current = setTimeout(() => {
+      tailTimerRef.current = null
+      tailRef.current = { pending: false, capAt: 0 }
+      drawRapidDegree()
+    }, wait)
   }
 
   function handleChordNote(pc, note) {
     if (disabled || !chordRunRef.current || gradeRef.current) return
-    const now = performance.now()
-    const tail = tailRef.current
-    if (tail.active) {
-      if (isChordTailNote({ pc, previousPcs: tail.pcs, until: tail.until, now })) return
-      tail.active = false
+    // Still waiting for the last chord's tail: swallow the note, keep waiting.
+    if (tailRef.current.pending) {
+      scheduleNextChord()
+      return
     }
     const degree = phase === 'rapid' ? rapidDegreeRef.current : sequence[chordIndexRef.current]
     const target = seventhByDegree(keyId, degree)
@@ -374,6 +394,9 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   function skipChord() {
     if (phase === 'rapid') {
       stopBar()
+      if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
+      tailTimerRef.current = null
+      tailRef.current = { pending: false, capAt: 0 }
       setChordMsg('SKIPPED.')
       drawRapidDegree()
       return
