@@ -3390,6 +3390,84 @@ select {
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
+/* ---- rapid-fire countdown bar + confidence meters ---- */
+.chordbar {
+  height: 18px;
+  margin-bottom: 10px;
+  border: 3px solid var(--line);
+  background: var(--panel);
+  overflow: hidden;
+}
+.chordbar__fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--signal-ink);
+  animation-name: chordbar-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+.chordbar:not(.is-live) .chordbar__fill {
+  animation: none;
+  width: 100%;
+}
+@keyframes chordbar-drain {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+.confidence {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  margin-bottom: 10px;
+}
+.confidence__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 3px solid var(--line);
+  background: var(--panel);
+  padding: 4px;
+}
+.confidence__roman {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.confidence__item.is-full .confidence__roman {
+  color: var(--ink);
+}
+.confidence__track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 40px;
+  border: 2px solid var(--line);
+  background: var(--bg);
+}
+.confidence__fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--ink);
+  transition: height 160ms ease-out;
+}
+.confidence__item.is-full .confidence__fill {
+  background: var(--signal-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .confidence__fill {
+    transition: none;
+  }
+}
+
 /* ---- rainbow point popups: every award floats up in color ---- */
 .pointspops {
   position: absolute;

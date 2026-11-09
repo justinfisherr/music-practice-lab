@@ -2,22 +2,27 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { diatonicPcs } from './phrases.js'
 import {
-  ARPEGGIO_NOTE_POINTS,
+  allDegreesFilled,
   BLUES_DEGREES,
   bluesChord,
   boogiePcs,
   buildJamDegrees,
+  bumpConfidence,
+  CHORD_TAIL_MS,
   chordTonePc,
+  emptyConfidence,
   fifthPc,
   fiveNoteRangePcs,
+  isChordTailNote,
   JAM_DEGREES,
   phrasePcs,
+  pickRapidDegree,
   PLAY_CHANGES,
   rapidPrompts,
-  scoreArpeggioTone,
-  scoreRapidFire,
+  scoreChord,
   RAPID_COUNT,
   INVERSION_BONUS,
+  CHORD_MISS_POINTS,
   rootFirstPhrase,
   scoreComp,
   scoreJamNote,
@@ -80,23 +85,59 @@ test('rapid prompts are forty deterministic degrees with no back-to-back repeat'
   assert.ok(prompts.every((degree, index) => index === 0 || degree !== prompts[index - 1]))
 })
 
-test('rapid scoring pays speed and combo, plus an inversion bonus', () => {
-  const slow = scoreRapidFire({ correct: true, elapsedMs: 2000, combo: 0 })
-  const fast = scoreRapidFire({ correct: true, elapsedMs: 0, combo: 0 })
-  assert.ok(fast.score > slow.score)
-  const inverted = scoreRapidFire({ correct: true, elapsedMs: 0, combo: 0, inversion: true })
-  assert.equal(inverted.score, fast.score + INVERSION_BONUS)
-  assert.equal(scoreRapidFire({ correct: false }).combo, 0)
+test('a clean chord pays the base and a slip costs points', () => {
+  const clean = scoreChord({ clean: true, combo: 0 })
+  const sloppy = scoreChord({ clean: false, combo: 4 })
+  assert.equal(clean.points, 100)
+  assert.equal(clean.combo, 1)
+  assert.equal(sloppy.points, CHORD_MISS_POINTS)
+  assert.equal(sloppy.combo, 0)
+  const inverted = scoreChord({ clean: true, combo: 0, inversion: true })
+  assert.equal(inverted.points, clean.points + INVERSION_BONUS)
+  assert.ok(scoreChord({ clean: true, combo: 6 }).points > clean.points)
 })
 
-test('arpeggio notes pay as they land, scaled by the combo', () => {
-  assert.equal(scoreArpeggioTone({ combo: 0 }), ARPEGGIO_NOTE_POINTS)
-  assert.ok(scoreArpeggioTone({ combo: 5 }) > ARPEGGIO_NOTE_POINTS)
-  assert.equal(scoreArpeggioTone({ combo: 99 }), ARPEGGIO_NOTE_POINTS * 2)
+test('confidence fills and empties by a quarter, and only full means filled', () => {
+  let confidence = emptyConfidence()
+  assert.equal(allDegreesFilled(confidence), false)
+  for (let hit = 0; hit < 4; hit++) confidence = bumpConfidence(confidence, 3, true)
+  assert.equal(confidence[2], 1)
+  assert.equal(allDegreesFilled(confidence), false)
+  confidence = bumpConfidence(confidence, 3, false)
+  assert.equal(confidence[2], 0.75)
+  for (let degree = 1; degree <= 7; degree++) {
+    for (let hit = 0; hit < 4; hit++) confidence = bumpConfidence(confidence, degree, true)
+  }
+  assert.equal(allDegreesFilled(confidence), true)
+})
+
+test('the next chord is drawn toward the least confident degree', () => {
+  let seed = 1234567
+  const rng = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296
+    return seed / 4294967296
+  }
+  const confidence = emptyConfidence().map((_, index) => (index === 6 ? 0 : 1))
+  const counts = Array(7).fill(0)
+  for (let draw = 0; draw < 700; draw++) counts[pickRapidDegree(rng, confidence) - 1] += 1
+  // The unfilled degree dominates, but the filled ones still come up.
+  assert.ok(counts[6] > 300)
+  assert.ok(counts.slice(0, 6).every((count) => count > 10))
+  // Once every degree is full the draw is flat across all seven.
+  const flat = Array(7).fill(0)
+  for (let draw = 0; draw < 700; draw++) flat[pickRapidDegree(rng, Array(7).fill(1)) - 1] += 1
+  assert.ok(flat.every((count) => count > 60))
 })
 
 test('the turnaround is I–vi–ii–V', () => {
   assert.deepEqual(TURNAROUND_DEGREES, [1, 6, 2, 5])
+})
+
+test('a chord tail note is ignored within its grace window', () => {
+  const previousPcs = [0, 4, 7, 11]
+  assert.equal(isChordTailNote({ pc: 4, previousPcs, until: CHORD_TAIL_MS, now: 1100 }), true)
+  assert.equal(isChordTailNote({ pc: 4, previousPcs, until: CHORD_TAIL_MS, now: CHORD_TAIL_MS + 1 }), false)
+  assert.equal(isChordTailNote({ pc: 2, previousPcs, until: CHORD_TAIL_MS, now: 1100 }), false)
 })
 
 const bars = [

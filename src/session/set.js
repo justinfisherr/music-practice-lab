@@ -152,35 +152,64 @@ export function rapidPrompts(seed = 0, keyId = 'C', count = 40) {
   return prompts
 }
 
-export const RAPID_FAST_MS = 2000
-export const RAPID_TARGET_SCORE = 500
 export const RAPID_COUNT = 40
 export const INVERSION_BONUS = 50
-export const VOICING_CHANGE_BONUS = 25
-// A chord may be blocked or arpeggiated. Every fresh chord tone pays on arrival
-// so an arpeggio racks up while it is being played; the completed chord pays the
-// base on top. The stop window is the silence timer: hold longer and the partial
-// chord is graded as missed.
-export const ARPEGGIO_NOTE_POINTS = 12
-export const ARPEGGIO_WINDOW_MS = 2400
+// Rapid-fire chord drill. Each prompt has a countdown bar that starts on the
+// first note and restarts on every note; a clean chord fills that degree's
+// confidence, a slip or an empty bar takes it back down.
+export const CHORD_BAR_MS = 2500
+export const CHORD_CLEAN_POINTS = 100
+export const CHORD_MISS_POINTS = -25
+export const CONFIDENCE_STEP = 0.25
+export const CONFIDENCE_FLOOR_WEIGHT = 0.15
+// After a chord lands, its own notes keep coming on the way down. For a short
+// window the next prompt ignores those pitches, so an up-and-down arpeggio
+// cannot slip the chord that follows it. Any other pitch ends the grace.
+export const CHORD_TAIL_MS = 2000
 
-export function scoreArpeggioTone({ combo = 0 } = {}) {
-  const current = Number.isFinite(combo) ? Math.max(0, combo) : 0
-  return Math.round(ARPEGGIO_NOTE_POINTS * Math.min(2, 1 + 0.1 * current))
+export function isChordTailNote({ pc, previousPcs = [], until = 0, now = 0 } = {}) {
+  return now < until && previousPcs.includes(pc)
 }
 
-// A correct answer always earns the full base. Speed is a bonus, never a tax:
-// fast is up to +100, two seconds or slower adds nothing. A non-root bass adds
-// the inversion bonus; changing the bass from the previous chord adds a little
-// more. Wrong resets the combo.
-export function scoreRapidFire({ correct, elapsedMs = 0, combo = 0, inversion = false, changed = false } = {}) {
+export function emptyConfidence() {
+  return Array(7).fill(0)
+}
+
+export function bumpConfidence(list, degree, clean) {
+  return list.map((value, index) => {
+    if (index !== degree - 1) return value
+    const next = value + (clean ? CONFIDENCE_STEP : -CONFIDENCE_STEP)
+    return Math.min(1, Math.max(0, Math.round(next * 100) / 100))
+  })
+}
+
+export function allDegreesFilled(list) {
+  return list.length === 7 && list.every((value) => value >= 1)
+}
+
+// Weighted draw toward the degrees that are least filled; uniform once every
+// degree is full, so practice keeps flowing until the user moves on.
+export function pickRapidDegree(rng, confidence) {
+  const values =
+    Array.isArray(confidence) && confidence.length === 7 ? confidence : emptyConfidence()
+  if (values.every((value) => value >= 1)) return 1 + Math.floor(rng() * 7)
+  const weights = values.map((value) => 1 - value + CONFIDENCE_FLOOR_WEIGHT)
+  const total = weights.reduce((sum, weight) => sum + weight, 0)
+  let ticket = rng() * total
+  for (let index = 0; index < weights.length; index++) {
+    ticket -= weights[index]
+    if (ticket <= 0) return index + 1
+  }
+  return 7
+}
+
+// A clean chord pays the base times the streak, plus a bonus for a non-root
+// bass. A missed chord knocks a little off and resets the streak.
+export function scoreChord({ clean, combo = 0, inversion = false, penalty = true } = {}) {
   const current = Number.isFinite(combo) ? Math.max(0, combo) : 0
-  if (!correct) return { score: 0, combo: 0, bonus: 0 }
-  const elapsed = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0
-  const speed = Math.max(0, 100 * (1 - elapsed / RAPID_FAST_MS))
-  const multiplier = Math.min(2, 1 + 0.1 * (Math.max(1, current) - 1))
-  const bonus = (inversion ? INVERSION_BONUS : 0) + (changed ? VOICING_CHANGE_BONUS : 0)
-  return { score: Math.round((100 + speed) * multiplier) + bonus, combo: current + 1, bonus }
+  if (!clean) return { points: penalty ? CHORD_MISS_POINTS : 0, combo: 0 }
+  const base = Math.round(CHORD_CLEAN_POINTS * Math.min(2, 1 + 0.1 * current))
+  return { points: base + (inversion ? INVERSION_BONUS : 0), combo: current + 1 }
 }
 
 // Four bars, one chord per bar. A hit is the first note inside the downbeat
