@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNoteSequence } from '../hooks/useNoteSequence.js'
-import { gradeSequence, gradeSet } from '../session/grade.js'
+import { gradeSequence } from '../session/grade.js'
 import { playChord, playPhrase, unlockAudio } from '../session/audio.js'
 import { noteName } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
 import {
+  ARPEGGIO_WINDOW_MS,
   bluesChord,
   boogiePcs,
   degreeRootPc,
+  scoreArpeggioTone,
   seventhByDegree,
   seventhQuality,
   RAPID_COUNT,
@@ -17,6 +19,7 @@ import {
   TURNAROUND_DEGREES,
 } from '../session/set.js'
 import ScaleLab from './ScaleLab.jsx'
+import PointsPops, { usePointPops } from './PointsPops.jsx'
 
 const SUFFIX = { maj7: 'maj7', min7: 'm7', dom7: '7', halfDim: 'ø7' }
 const ROMAN = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°']
@@ -49,6 +52,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const [boogieCleared, setBoogieCleared] = useState({})
   const [revealChord, setRevealChord] = useState(null)
   const [revealed, setRevealed] = useState(0)
+  const { pops, pop } = usePointPops()
   const playedRef = useRef([])
   const passedRef = useRef({ ear: false })
   const labRef = useRef(null)
@@ -246,6 +250,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
         setScore(scoreRef.current)
         setChordClean(correctRef.current)
         if (scoreRef.current >= RAPID_TARGET_SCORE) setRapidPassed(true)
+        pop(outcome.score, 'CLEAN')
         setChordMsg(
           outcome.bonus
             ? `CLEAN · +${outcome.score} · VOICING +${outcome.bonus}`
@@ -320,15 +325,30 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     gradeRef.current = false
   }
 
+  // Every fresh chord tone pays as it lands, so a slow arpeggio racks up while
+  // it is being played. A stray note ends the attempt; so does a full stop.
+  function awardTone() {
+    const points = scoreArpeggioTone({ combo: comboRef.current })
+    scoreRef.current += points
+    setScore(scoreRef.current)
+    if (scoreRef.current >= RAPID_TARGET_SCORE) setRapidPassed(true)
+    pop(points)
+  }
+
   function handleChordNote(pc, note) {
     if (disabled || !chordRunRef.current || !chordArmedRef.current || gradeRef.current) return
     const degree = sequence[chordIndexRef.current]
+    const target = seventhByDegree(keyId, degree)
+    if (!target.includes(pc)) {
+      finishChordPrompt(false)
+      return
+    }
+    if (chordNotesRef.current.includes(pc)) return
     chordNotesRef.current = [...chordNotesRef.current, pc]
     if (Number.isFinite(note)) chordMidiRef.current = [...chordMidiRef.current, note]
+    if (phase === 'rapid') awardTone()
     setPlayed(chordNotesRef.current)
-    const target = seventhByDegree(keyId, degree)
-    if (gradeSet(target, chordNotesRef.current).passed) finishChordPrompt(true)
-    else if (chordNotesRef.current.length >= 4) finishChordPrompt(false)
+    if (chordNotesRef.current.length >= target.length) finishChordPrompt(true)
   }
 
   function handleChordSilence() {
@@ -382,6 +402,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     active: (phase === 'rapid' || phase === 'turnaround') && chordRun && !disabled,
     onNote: handleChordNote,
     onSilence: handleChordSilence,
+    silenceMs: ARPEGGIO_WINDOW_MS,
   })
 
   // ---- boogie drill, inside the turnaround phase --------------------------
@@ -454,7 +475,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
             : phase === 'ear'
               ? 'Four notes. Hear them once, then play them back in order.'
               : phase === 'rapid'
-                ? 'Six seventh chords by degree, in order: I ii iii IV V vi. Play all six clean to move on.'
+                ? 'Six seventh chords by degree, in order: I ii iii IV V vi. Block the chord or arpeggiate it — every chord tone pays as it lands. Play all six clean to move on.'
                 : 'I–vi–ii–V. The chord names stay on screen. Comp each one clean to move on.'}
         </p>
       </div>
@@ -568,6 +589,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
       {phase === 'rapid' ? (
         <>
           <div className="rapid">
+            <PointsPops pops={pops} />
             <div className="rapid__score">
               <span className="rapid__label">SCORE</span>
               <span className="rapid__value">{score}</span>
@@ -622,9 +644,9 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
               </div>
               <div className="rapidbar">
                 <span>FAST ADDS, SLOW NEVER TAXES</span>
-                <span>INVERSION BASS BONUS</span>
+                <span>ARPEGGIATE · STOP {ARPEGGIO_WINDOW_MS / 1000}S AND IT GRADES</span>
               </div>
-              <p className="hintline">{chordMsg || 'PLAY THE CHORD WHEN READY.'}</p>
+              <p className="hintline">{chordMsg || 'PLAY THE CHORD, OR ARPEGGIATE IT — EACH TONE PAYS.'}</p>
               <div className="stagefoot">
                 <button type="button" className="btn" onClick={skipChord} disabled={disabled}>
                   SKIP

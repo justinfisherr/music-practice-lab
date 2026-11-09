@@ -157,6 +157,17 @@ export const RAPID_TARGET_SCORE = 500
 export const RAPID_COUNT = 40
 export const INVERSION_BONUS = 50
 export const VOICING_CHANGE_BONUS = 25
+// A chord may be blocked or arpeggiated. Every fresh chord tone pays on arrival
+// so an arpeggio racks up while it is being played; the completed chord pays the
+// base on top. The stop window is the silence timer: hold longer and the partial
+// chord is graded as missed.
+export const ARPEGGIO_NOTE_POINTS = 12
+export const ARPEGGIO_WINDOW_MS = 2400
+
+export function scoreArpeggioTone({ combo = 0 } = {}) {
+  const current = Number.isFinite(combo) ? Math.max(0, combo) : 0
+  return Math.round(ARPEGGIO_NOTE_POINTS * Math.min(2, 1 + 0.1 * current))
+}
 
 // A correct answer always earns the full base. Speed is a bonus, never a tax:
 // fast is up to +100, two seconds or slower adds nothing. A non-root bass adds

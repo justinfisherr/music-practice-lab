@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { diatonicPcs } from './phrases.js'
 import {
+  ARPEGGIO_NOTE_POINTS,
   BLUES_DEGREES,
   bluesChord,
   boogiePcs,
@@ -13,6 +14,7 @@ import {
   phrasePcs,
   PLAY_CHANGES,
   rapidPrompts,
+  scoreArpeggioTone,
   scoreRapidFire,
   RAPID_COUNT,
   INVERSION_BONUS,
@@ -85,6 +87,12 @@ test('rapid scoring pays speed and combo, plus an inversion bonus', () => {
   const inverted = scoreRapidFire({ correct: true, elapsedMs: 0, combo: 0, inversion: true })
   assert.equal(inverted.score, fast.score + INVERSION_BONUS)
   assert.equal(scoreRapidFire({ correct: false }).combo, 0)
+})
+
+test('arpeggio notes pay as they land, scaled by the combo', () => {
+  assert.equal(scoreArpeggioTone({ combo: 0 }), ARPEGGIO_NOTE_POINTS)
+  assert.ok(scoreArpeggioTone({ combo: 5 }) > ARPEGGIO_NOTE_POINTS)
+  assert.equal(scoreArpeggioTone({ combo: 99 }), ARPEGGIO_NOTE_POINTS * 2)
 })
 
 test('the turnaround is I–vi–ii–V', () => {

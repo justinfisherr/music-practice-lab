@@ -156,7 +156,15 @@ export default function SessionRun({ practice, onFinished, onExit }) {
         </p>
       ) : lost ? (
         <p className="notestamp notestamp--lost" role="status">
-          KEYBOARD LOST — RECONNECT. The clock is paused and nothing is counted.
+          KEYBOARD LOST — RECONNECT. The clock is paused and nothing is counted.{' '}
+          <button
+            type="button"
+            className="btn"
+            onClick={midi.connect}
+            disabled={midi.status === 'requesting'}
+          >
+            {midi.status === 'requesting' ? 'REQUESTING MIDI…' : 'RECONNECT KEYBOARD'}
+          </button>
         </p>
       ) : null}
 

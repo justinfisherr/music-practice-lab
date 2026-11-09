@@ -3,6 +3,7 @@ import { useChangesRound } from '../hooks/useChangesRound.js'
 import { keyDisplay } from '../data/scales.js'
 import { buildJamDegrees, chordLabel, PLAY_CHANGES } from '../session/set.js'
 import FoundationLink from './FoundationLink.jsx'
+import PointsPops, { usePointPops } from './PointsPops.jsx'
 
 export default function JamStage({ session, stageId, onDone, disabled, recordAttempt }) {
   const keyId = session.keyId
@@ -17,6 +18,8 @@ export default function JamStage({ session, stageId, onDone, disabled, recordAtt
   const [changesId, setChangesId] = useState(initialChangesId)
   const [barsPerChord, setBarsPerChord] = useState(initialBarsPerChord)
   const attemptedRef = useRef(false)
+  const { pops, pop } = usePointPops()
+  const lastScoreRef = useRef(0)
 
   const changes = useChangesRound({
     keyId,
@@ -30,6 +33,14 @@ export default function JamStage({ session, stageId, onDone, disabled, recordAtt
       recordAttempt(stageId, false)
     },
   })
+
+  // Points land at each change; the popup shows the delta.
+  useEffect(() => {
+    const score = changes.live.score || 0
+    const delta = score - lastScoreRef.current
+    lastScoreRef.current = score
+    if (delta > 0) pop(delta)
+  }, [changes.live.score, pop])
 
   useEffect(() => {
     if (!disabled) return
@@ -184,6 +195,7 @@ export default function JamStage({ session, stageId, onDone, disabled, recordAtt
           </div>
 
           <div className="rapid">
+            <PointsPops pops={pops} />
             <div className="rapid__score">
               <span className="rapid__label">SCORE</span>
               <span className="rapid__value">{changes.live.score}</span>
