@@ -37,6 +37,7 @@
   --pad-gap: 6px;
   --pad-h: calc(var(--pad-key-h) * 3 + 55px);
   --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
   color-scheme: var(--scheme);
 }
@@ -229,7 +230,21 @@ select {
 .app {
   max-width: 860px;
   margin: 0 auto;
-  padding: 20px 16px 80px;
+  padding: calc(20px + var(--safe-t)) 16px 80px;
+}
+
+/* Opaque strip over the notch/status-bar inset: padding alone still lets
+   scrolled content pass behind it. Height is 0 without an inset. */
+.app::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--safe-t);
+  background: var(--bg);
+  pointer-events: none;
+  z-index: 30;
 }
 
 /* v3 owns the real wide layout; this just stops the single column from
@@ -5425,7 +5440,7 @@ button.artistcard__hint:focus-visible {
   /* Run chrome: LEAVE is the only exit. */
   .app--run {
     max-width: none;
-    padding: 0 10px;
+    padding: var(--safe-t) 10px 0;
   }
   .app--run .masthead,
   .app--run .nav,
@@ -5436,6 +5451,7 @@ button.artistcard__hint:focus-visible {
     gap: 10px;
   }
   .app--run .sessionbar {
+    top: var(--safe-t);
     min-height: 52px;
     flex-wrap: nowrap;
     gap: 8px;
@@ -5671,6 +5687,7 @@ button.artistcard__hint:focus-visible {
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
+  padding-top: var(--safe-t);
   padding-bottom: var(--safe-b);
   background: var(--bg);
   color: var(--ink);
@@ -6131,6 +6148,18 @@ button.artistcard__hint:focus-visible {
 }
 .desk__start .btn {
   width: 100%;
+}
+.btn--house-resume {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
 }
 .houseplan {
   order: 2;

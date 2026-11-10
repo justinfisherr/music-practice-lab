@@ -58,6 +58,7 @@ export default function Wheel({
   variant = 'tonight',
   activeNotes = [],
   disabled = false,
+  phone = false,
   onBonus,
   onTonight,
   onStartBonus,
@@ -263,7 +264,7 @@ export default function Wheel({
             onClick={() => onStartBonus?.(bonusKey)}
             disabled={disabled || spinning}
           >
-            START BONUS
+            {phone ? `PLAY BONUS · ${keyDisplay(bonusKey)}` : 'START BONUS'}
           </button>
         ) : null}
       </div>

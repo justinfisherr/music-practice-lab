@@ -122,7 +122,33 @@ export default function SessionTab({
   }
 
   let action
-  if (manualActive) {
+  let gradedResume = null
+  if (phone) {
+    // On a phone the primary action is always SEVENTH HOUSE. An in-progress
+    // graded run is kept, but demoted to a secondary row below it.
+    action = (
+      <button
+        type="button"
+        className="btn btn--huge btn--signal"
+        onClick={() => onOpenArcade(keyId)}
+      >
+        START SEVENTH HOUSE{variant === 'bonus' ? ` · ${keyDisplay(keyId)}` : ''}
+      </button>
+    )
+    gradedResume =
+      sessionActive && session?.kind !== 'manual' ? (
+        <button
+          type="button"
+          className="btn btn--house-resume"
+          onClick={() => {
+            unlockAudio()
+            onResume()
+          }}
+        >
+          RESUME GRADED SESSION
+        </button>
+      ) : null
+  } else if (manualActive) {
     action = null
   } else if (sessionActive) {
     action = (
@@ -150,11 +176,7 @@ export default function SessionTab({
     )
   } else {
     action = (
-      <button
-        type="button"
-        className="btn btn--huge btn--signal"
-        onClick={() => (isPhone() ? onOpenArcade(keyId) : startSet())}
-      >
+      <button type="button" className="btn btn--huge btn--signal" onClick={() => startSet()}>
         START {variant === 'bonus' ? 'BONUS' : 'TODAY'}
       </button>
     )
@@ -175,7 +197,12 @@ export default function SessionTab({
             </p>
           </div>
 
-          {phone ? <div className="desk__start">{action}</div> : null}
+          {phone ? (
+            <div className="desk__start">
+              {action}
+              {gradedResume}
+            </div>
+          ) : null}
 
           <Wheel
             date={date}
@@ -189,13 +216,20 @@ export default function SessionTab({
               if (variant !== 'bonus') setVariant('bonus')
             }}
             onTonight={() => setVariant('tonight')}
-            onStartBonus={(key) =>
+            phone={phone}
+            onStartBonus={(key) => {
+              unlockAudio()
+              startedRef.current = true
+              if (phone) {
+                onOpenArcade(key)
+                return
+              }
               startSession(
                 variant === 'bonus' && plan?.source === 'llm' ? plan : null,
                 key,
                 'bonus',
               )
-            }
+            }}
           />
         </aside>
 
