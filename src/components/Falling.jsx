@@ -11,6 +11,7 @@ import {
   buildRun,
   gradeTiming,
   multiplierFor,
+  pointsFor,
   saveBest,
 } from '../session/arcade.js'
 import {
@@ -103,19 +104,17 @@ export default function Falling({ onExit }) {
     setPhase('summary')
   }, [])
 
-  const tick = useCallback(() => {
-    const run = runRef.current
-    if (!run || run.ended || phaseRef.current !== 'run') return
-    const now = performance.now()
+  // Resolve the cue whose light just went out and light the next one due. Run
+  // from the frame loop and again on a tap, so a tap never grades the wrong cue.
+  const advance = useCallback((run, now) => {
     let dirty = false
-
-    // A cue whose window shut counts before the next one lights.
     const active = run.active
     if (active && now >= active.darkAt) {
       run.active = null
       if (active.kind === 'bomb') {
         pushCue(run, 'ok', now) // letting a bomb go dark is the play
       } else {
+        // Expiry costs the streak, never the points already banked.
         run.misses += active.pcs.filter((pc) => !active.pressed.has(pc)).length
         run.streak = 0
         pushCue(run, 'miss', now)
@@ -123,26 +122,33 @@ export default function Falling({ onExit }) {
       dirty = true
     }
 
-    if (!run.active) {
-      while (run.cursor < run.cues.length && now >= run.cues[run.cursor].litAt) {
-        const cue = run.cues[run.cursor++]
-        // A stalled frame can arrive after the window shut: grade it, move on.
-        if (now < cue.darkAt) {
-          run.active = cue
-          if (!isMuted()) playChord(cue.pcs, { duration: 0.4 })
-          dirty = true
-          break
-        }
-        if (cue.kind === 'bomb') {
-          pushCue(run, 'ok', now)
-        } else {
-          run.misses += cue.pcs.length
-          run.streak = 0
-          pushCue(run, 'miss', now)
-        }
+    while (!run.active && run.cursor < run.cues.length && now >= run.cues[run.cursor].litAt) {
+      const cue = run.cues[run.cursor++]
+      // A stalled frame can arrive after the whole light: grade it, move on.
+      if (now < cue.darkAt) {
+        run.active = cue
+        if (!isMuted()) playChord(cue.pcs, { duration: 0.4 })
         dirty = true
+        break
       }
+      if (cue.kind === 'bomb') {
+        pushCue(run, 'ok', now)
+      } else {
+        run.misses += cue.pcs.length
+        run.streak = 0
+        pushCue(run, 'miss', now)
+      }
+      dirty = true
     }
+
+    return dirty
+  }, [])
+
+  const tick = useCallback(() => {
+    const run = runRef.current
+    if (!run || run.ended || phaseRef.current !== 'run') return
+    const now = performance.now()
+    let dirty = advance(run, now)
 
     if (run.cue && now >= run.cue.until) {
       run.cue = null
@@ -151,7 +157,7 @@ export default function Falling({ onExit }) {
 
     if (dirty) publish(run, now)
     if (run.cursor >= run.cues.length && !run.active) finish()
-  }, [publish, finish])
+  }, [advance, publish, finish])
 
   useEffect(() => {
     const loop = () => {
@@ -252,6 +258,7 @@ export default function Falling({ onExit }) {
       const run = runRef.current
       if (!run || run.ended || phaseRef.current !== 'run') return
       const now = performance.now()
+      advance(run, now) // the next cue may have taken over this instant
       const active = run.active
       const lit = active && active.pcs.includes(pc) && !active.pressed.has(pc)
 
@@ -264,7 +271,7 @@ export default function Falling({ onExit }) {
       }
 
       if (active.kind === 'bomb') {
-        run.score -= 250
+        run.score -= 150
         run.streak = 0
         run.bombsHit += 1
         run.active = null
@@ -274,25 +281,21 @@ export default function Falling({ onExit }) {
         return
       }
 
+      // Every lit key grades on its own tap, so a half-entered chord keeps what
+      // its keys already earned.
       active.pressed.add(pc)
       if (!isMuted()) playChord([pc], { duration: 0.25 })
-      run.score += 100 * multiplierFor(run.streak)
+      const timing = gradeTiming(now - active.litAt, active.hold)
+      run.score += pointsFor(timing) * multiplierFor(run.streak)
       run.streak += 1
       run.bestStreak = Math.max(run.bestStreak, run.streak)
       run.hits += 1
+      pushCue(run, timing === 'late' ? 'good' : timing, now)
 
-      // A chord grades on its last tap; until then the tapped key just goes dark.
-      if (active.pressed.size < active.pcs.length) {
-        publish(run, now)
-        return
-      }
-
-      const timing = gradeTiming(now - active.litAt)
-      run.active = null
-      pushCue(run, timing, now)
+      if (active.pressed.size === active.pcs.length) run.active = null
       publish(run, now)
     },
-    [publish],
+    [advance, publish],
   )
 
   useNoteSequence({ active: phase === 'run', onNote: tapKey })

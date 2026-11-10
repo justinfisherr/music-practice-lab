@@ -6,29 +6,29 @@ import { keyById } from '../data/scales.js'
 
 export const RUN_CUES = 60
 export const BEST_KEY = 'mpl.arcade.falling.best'
-export const PERFECT_MS = 200 // tap this soon after the light = PERFECT
+export const PERFECT_MS = 350 // tap this soon after the light = PERFECT
+export const GRACE_MS = 450 // the last stretch of the light is late, at half points
 export const CUE_WORD_MS = 420 // how long a grade word holds on screen
 
-const BASE_MS = 900
-const FLOOR_MS = 500
-const RAMP_MS = 30000
-const HOLD_FLOOR_MS = 420
-const HOLD_RATIO = 0.85
+const BASE_MS = 1600
+const FLOOR_MS = 900
+const RAMP_MS = 45000
+const CHORD_HOLD = 1.25
 const CHORD_ODDS = 1 / 7
 const MAX_CHORDS = 3
 const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11]
 
-// 900ms between cues at the start, 500ms once the run is 30s old, then flat.
+// 1600ms between cues at the start, 900ms once the run is 45s old, then flat.
 export function intervalFor(elapsedMs) {
   if (!(elapsedMs > 0)) return BASE_MS
   if (elapsedMs >= RAMP_MS) return FLOOR_MS
   return Math.round(BASE_MS + (FLOOR_MS - BASE_MS) * (elapsedMs / RAMP_MS))
 }
 
-// The lit window is the grade window: always shorter than the gap to the next
-// cue, so two cues can never be lit at once.
-export function holdFor(interval) {
-  return Math.max(HOLD_FLOOR_MS, Math.round(interval * HOLD_RATIO))
+// A cue stays lit until the next one arrives, so the hold is the time to the
+// next cue. A chord has more keys to enter and gets a quarter more.
+export function holdFor(interval, kind = 'note') {
+  return kind === 'chord' ? Math.round(interval * CHORD_HOLD) : interval
 }
 
 export function windowFor(cue) {
@@ -42,10 +42,20 @@ export function multiplierFor(streak) {
   return 1
 }
 
-// ms from the light is all the grader needs: inside the window is GOOD, the
-// first 200ms is PERFECT.
-export function gradeTiming(delta) {
-  return delta <= PERFECT_MS ? 'perfect' : 'good'
+// ms from the light. The first 350ms is PERFECT, then GOOD, then the last 450ms
+// of the light is a late tap that still counts, at half points.
+export function gradeTiming(delta, hold) {
+  if (delta < 0) return 'miss'
+  if (delta <= PERFECT_MS) return 'perfect'
+  if (delta <= hold - GRACE_MS) return 'good'
+  if (delta <= hold) return 'late'
+  return 'miss'
+}
+
+// PERFECT and on-time GOOD are worth 100, a late tap 50.
+export function pointsFor(timing) {
+  if (timing === 'perfect' || timing === 'good') return 100
+  return timing === 'late' ? 50 : 0
 }
 
 export function bestScore() {
@@ -86,39 +96,43 @@ export function buildRun({ keyId = 'C', seed = 1, cues = RUN_CUES } = {}) {
   const pick = (pool) => Math.floor(rand() * pool.length)
 
   const events = []
-  let t = intervalFor(0) * 2 // a beat to read NEXT before the first light
+  let t = intervalFor(0) // a beat to read NEXT before the first light
   let firstA = -1
   let firstB = -1
   let chords = 0
-  let nextBomb = 3 + Math.floor(rand() * 3) // cue 4 at the earliest
+  let nextBomb = 7 + Math.floor(rand() * 3) // cue 8 at the earliest
   const repeat = (pc) => pc === firstA && pc === firstB
 
   for (let i = 0; i < cues; i++) {
     const interval = intervalFor(t)
-    const hold = holdFor(interval)
     const canSpecial = i >= 3
+    const bomb = i >= 7 && i >= nextBomb
     let event
 
-    if (canSpecial && chords < MAX_CHORDS && rand() < CHORD_ODDS) {
-      // A diatonic dyad, triad or seventh, rooted somewhere that breaks a run.
-      const size = 2 + Math.floor(rand() * 3)
+    if (canSpecial && !bomb && chords < MAX_CHORDS && rand() < CHORD_ODDS) {
+      // A diatonic dyad or triad, rooted somewhere that breaks a run.
+      const size = 2 + Math.floor(rand() * 2)
       let root = pick(MAJOR_STEPS)
       for (let spin = 0; spin < 6 && repeat(inKey[root]); spin++) root = (root + 1) % 7
-      const pcs = [0, 2, 4, 6].slice(0, size).map((step) => inKey[(root + step) % 7])
-      event = { t: Math.round(t), hold, pcs, kind: 'chord' }
+      const pcs = [0, 2, 4].slice(0, size).map((step) => inKey[(root + step) % 7])
+      event = { t: Math.round(t), hold: holdFor(interval, 'chord'), pcs, kind: 'chord' }
       chords += 1
     } else {
-      const bomb = canSpecial && i >= nextBomb
       if (bomb) nextBomb = i + 4 + Math.floor(rand() * 3)
       const pool = (bomb ? offKey : inKey).filter((pc) => !repeat(pc))
       const pc = pool.length ? pool[pick(pool)] : (bomb ? offKey : inKey)[0]
-      event = { t: Math.round(t), hold, pcs: [pc], kind: bomb ? 'bomb' : 'note' }
+      event = {
+        t: Math.round(t),
+        hold: holdFor(interval),
+        pcs: [pc],
+        kind: bomb ? 'bomb' : 'note',
+      }
     }
 
     events.push(event)
     firstA = firstB
     firstB = event.pcs[0]
-    t += interval
+    t += event.hold
   }
 
   return events

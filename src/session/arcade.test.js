@@ -1,12 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  GRACE_MS,
+  PERFECT_MS,
   RUN_CUES,
   buildRun,
   gradeTiming,
   holdFor,
   intervalFor,
   multiplierFor,
+  pointsFor,
   windowFor,
 } from './arcade.js'
 import { keyById } from '../data/scales.js'
@@ -40,7 +43,7 @@ test('bombs are always off-key, notes and chords are always in-key', () => {
           for (const pc of cue.pcs) assert.ok(pcs.includes(pc), 'cue must be in-scale')
         }
         if (cue.kind === 'chord') {
-          assert.ok(cue.pcs.length >= 2 && cue.pcs.length <= 4, 'chord lights 2 to 4 keys')
+          assert.ok(cue.pcs.length >= 2 && cue.pcs.length <= 3, 'chord lights 2 to 3 keys')
           assert.equal(new Set(cue.pcs).size, cue.pcs.length, 'chord keys are distinct')
         }
       }
@@ -48,12 +51,12 @@ test('bombs are always off-key, notes and chords are always in-key', () => {
   }
 })
 
-test('no bomb before the fourth cue, and bombs stay around one in five', () => {
+test('the first seven cues are playable, and bombs stay around one in five', () => {
   for (const seed of SEEDS) {
     const cues = buildRun({ keyId: 'C', seed })
-    cues.slice(0, 3).forEach((cue) => assert.equal(cue.kind, 'note'))
+    cues.slice(0, 7).forEach((cue) => assert.notEqual(cue.kind, 'bomb'))
     const bombs = cues.filter((cue) => cue.kind === 'bomb').length
-    assert.ok(bombs >= 8 && bombs <= 22, `${bombs} bombs in ${cues.length} cues`)
+    assert.ok(bombs >= 6 && bombs <= 18, `${bombs} bombs in ${cues.length} cues`)
   }
 })
 
@@ -71,35 +74,59 @@ test('no key three cues running', () => {
   }
 })
 
-test('a lit window never runs into the next cue', () => {
+test('a lit window ends exactly where the next cue starts', () => {
   for (const seed of SEEDS) {
     for (const keyId of KEYS) {
       const cues = buildRun({ keyId, seed })
       for (let i = 1; i < cues.length; i++) {
         const before = windowFor(cues[i - 1])
         const after = windowFor(cues[i])
-        assert.ok(before[1] < after[0], `window ${i - 1} runs into cue ${i}`)
+        assert.equal(before[1], after[0], `cue ${i} leaves a gap or overlaps`)
         assert.ok(before[1] > before[0], 'a window has length')
       }
     }
   }
 })
 
-test('the cue interval ramps 900 to 500 over 30s and the hold floors at 420', () => {
-  assert.equal(intervalFor(0), 900)
-  assert.equal(intervalFor(15000), 700)
-  assert.equal(intervalFor(30000), 500)
-  assert.equal(intervalFor(60000), 500)
-  assert.equal(holdFor(900), 765)
-  assert.equal(holdFor(500), 425)
-  assert.equal(holdFor(400), 420)
+test('a run is slow enough to read: 1600ms to 900ms, about a minute long', () => {
+  for (const seed of SEEDS) {
+    const cues = buildRun({ keyId: 'C', seed })
+    const last = cues[cues.length - 1]
+    assert.ok(last.t + last.hold > 30000, 'a run takes at least 30s')
+    assert.ok(last.t + last.hold < 75000, 'a run stays under 75s')
+    for (let i = 1; i < cues.length; i++) {
+      assert.ok(cues[i].t - cues[i - 1].t >= 900, 'no cue lands closer than 900ms')
+    }
+  }
+})
+
+test('the cue interval ramps 1600 to 900 over 45s and the hold is the interval', () => {
+  assert.equal(intervalFor(0), 1600)
+  assert.equal(intervalFor(15000), 1367)
+  assert.equal(intervalFor(30000), 1133)
+  assert.equal(intervalFor(45000), 900)
+  assert.equal(intervalFor(60000), 900)
+  assert.equal(holdFor(1600), 1600)
+  assert.equal(holdFor(1600, 'chord'), 2000)
+  assert.equal(holdFor(900), 900)
+  assert.equal(holdFor(900, 'chord'), 1125)
   assert.equal(multiplierFor(0), 1)
   assert.equal(multiplierFor(12), 4)
 })
 
-test('the first 200ms is PERFECT, anything later in the window is GOOD', () => {
-  assert.equal(gradeTiming(0), 'perfect')
-  assert.equal(gradeTiming(200), 'perfect')
-  assert.equal(gradeTiming(201), 'good')
-  assert.equal(gradeTiming(500), 'good')
+test('350ms is PERFECT, the last 450ms of the light still counts, at half points', () => {
+  const hold = 1600
+  assert.equal(PERFECT_MS, 350)
+  assert.equal(GRACE_MS, 450)
+  assert.equal(gradeTiming(0, hold), 'perfect')
+  assert.equal(gradeTiming(350, hold), 'perfect')
+  assert.equal(gradeTiming(351, hold), 'good')
+  assert.equal(gradeTiming(hold - GRACE_MS, hold), 'good')
+  assert.equal(gradeTiming(hold - GRACE_MS + 1, hold), 'late')
+  assert.equal(gradeTiming(hold, hold), 'late')
+  assert.equal(gradeTiming(hold + 1, hold), 'miss')
+  assert.equal(pointsFor('perfect'), 100)
+  assert.equal(pointsFor('good'), 100)
+  assert.equal(pointsFor('late'), 50)
+  assert.equal(pointsFor('miss'), 0)
 })
