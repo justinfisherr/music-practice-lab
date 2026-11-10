@@ -1,14 +1,19 @@
-import { keyById } from '../data/scales.js'
+import { diatonicSevenths, keyById } from '../data/scales.js'
 
-// Lit-key prototype: pure cue logic, no DOM. A cue lights one to four keys on a
-// one-octave piano and stays lit for its grade window. Nothing here knows what a
-// phone is.
+// Lit-key prototype: pure cue logic, no DOM. A cue lights keys on a one-octave
+// piano and stays lit for its grade window. Nothing here knows what a phone is.
 
 export const RUN_CUES = 60
 export const BEST_KEY = 'mpl.arcade.falling.best'
 export const PERFECT_MS = 350 // tap this soon after the light = PERFECT
 export const GRACE_MS = 450 // the last stretch of the light is late, at half points
 export const CUE_WORD_MS = 420 // how long a grade word holds on screen
+
+// The chord break: four keys sweep 140ms apart, then 900ms to read the chord.
+export const SWEEP_MS = 140
+export const BREAK_HOLD_MS = 900
+export const BREAK_MS = 3 * SWEEP_MS + BREAK_HOLD_MS // 1320
+export const CLEAR_MS = 400 // the CLEAR stamp after a chord is entered
 
 const BASE_MS = 1600
 const FLOOR_MS = 900
@@ -33,6 +38,26 @@ export function holdFor(interval, kind = 'note') {
 
 export function windowFor(cue) {
   return [cue.t, cue.t + cue.hold]
+}
+
+// How many of a chord's four keys have swept in by `now`.
+export function breakSweep(start, now, keys = 4) {
+  return Math.min(keys, Math.floor((now - start) / SWEEP_MS) + 1)
+}
+
+// Freeze the run for a chord break: the cue and everything after it move back by
+// the break, so the break costs the player nothing. Returns the shift.
+export function startBreak(run, cue, now) {
+  const from = cue.litAt // read before the loop mutates the cue
+  const shift = now + BREAK_MS - from
+  for (const other of run.cues) {
+    if (other.litAt >= from) {
+      other.litAt += shift
+      other.darkAt += shift
+    }
+  }
+  run.break = { cue, start: now, until: now + BREAK_MS, swept: 1 }
+  return shift
 }
 
 export function multiplierFor(streak) {
@@ -99,23 +124,43 @@ export function buildRun({ keyId = 'C', seed = 1, cues = RUN_CUES } = {}) {
   let t = intervalFor(0) // a beat to read NEXT before the first light
   let firstA = -1
   let firstB = -1
+  let lastKind = null
   let chords = 0
   let nextBomb = 7 + Math.floor(rand() * 3) // cue 8 at the earliest
   const repeat = (pc) => pc === firstA && pc === firstB
+  const sevenths = diatonicSevenths(keyId)
 
   for (let i = 0; i < cues; i++) {
     const interval = intervalFor(t)
-    const canSpecial = i >= 3
-    const bomb = i >= 7 && i >= nextBomb
+    const canSpecial = i >= 7
+    const bomb = canSpecial && i >= nextBomb
+    const chordFits = canSpecial && !bomb && lastKind !== 'chord' && chords < MAX_CHORDS
     let event
 
-    if (canSpecial && !bomb && chords < MAX_CHORDS && rand() < CHORD_ODDS) {
-      // A diatonic dyad or triad, rooted somewhere that breaks a run.
-      const size = 2 + Math.floor(rand() * 2)
-      let root = pick(MAJOR_STEPS)
-      for (let spin = 0; spin < 6 && repeat(inKey[root]); spin++) root = (root + 1) % 7
-      const pcs = [0, 2, 4].slice(0, size).map((step) => inKey[(root + step) % 7])
-      event = { t: Math.round(t), hold: holdFor(interval, 'chord'), pcs, kind: 'chord' }
+    if (chordFits && rand() < CHORD_ODDS) {
+      // A seventh chord of the night's key, in a random inversion: the label and
+      // the sweep order teach it, since four pitch classes cannot show a bass.
+      let degree = pick(sevenths)
+      for (let spin = 0; spin < 6 && repeat(sevenths[degree].pitchClasses[0]); spin++) {
+        degree = (degree + 1) % 7
+      }
+      const chord = sevenths[degree]
+      const inversion = Math.floor(rand() * 4)
+      const sweep = [
+        ...chord.pitchClasses.slice(inversion),
+        ...chord.pitchClasses.slice(0, inversion),
+      ]
+      event = {
+        t: Math.round(t),
+        hold: holdFor(interval, 'chord'),
+        pcs: chord.pitchClasses,
+        sweep,
+        kind: 'chord',
+        inversion,
+        label: `${chord.name}/${chord.notes[inversion]}`,
+        numeral: chord.numeral,
+        notesText: chord.notes.join(' '),
+      }
       chords += 1
     } else {
       if (bomb) nextBomb = i + 4 + Math.floor(rand() * 3)
@@ -132,6 +177,7 @@ export function buildRun({ keyId = 'C', seed = 1, cues = RUN_CUES } = {}) {
     events.push(event)
     firstA = firstB
     firstB = event.pcs[0]
+    lastKind = event.kind
     t += event.hold
   }
 

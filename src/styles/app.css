@@ -6092,6 +6092,49 @@ button.artistcard__hint:focus-visible {
   cursor: default;
 }
 
+/* The chord break: a full-bleed inverted block, cut in with no motion. */
+.arcade__break {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  background: var(--ink);
+  color: var(--bg);
+  text-align: center;
+}
+.arcade__breakname {
+  font-size: var(--cue-size);
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+.arcade__breakrule {
+  width: min(240px, 64%);
+  border-top: 3px solid var(--bg);
+}
+.arcade__breaknum {
+  font-size: var(--combo-size);
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: var(--muted-on-ink);
+}
+.arcade__breaknotes {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--muted-on-ink);
+}
+.arcade__breakclear {
+  font-size: var(--combo-size);
+  font-weight: 800;
+  letter-spacing: 4px;
+}
+
 /* Landscape is a real layout: shorter chrome, a bigger word, a shorter key. */
 @media (orientation: landscape) and (max-height: 500px) {
   .arcade {

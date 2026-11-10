@@ -91,3 +91,39 @@ export function diatonicChords(keyId) {
     }
   })
 }
+
+// The seven diatonic seventh chords of a major key, I..viiø7.
+//   numeral       — roman-numeral function with its seventh ("ii7", "viiø7")
+//   name          — display chord name in the key's spelling ("F#m7b5")
+//   notes         — spelled root-third-fifth-seventh, in that order
+//   pitchClasses  — the same four in root order, so an inversion can rotate them
+const SEVENTHS = [
+  { numeral: 'Imaj7', quality: 'maj7', suffix: 'maj7' },
+  { numeral: 'iim7', quality: 'min7', suffix: 'm7' },
+  { numeral: 'iiim7', quality: 'min7', suffix: 'm7' },
+  { numeral: 'IVmaj7', quality: 'maj7', suffix: 'maj7' },
+  { numeral: 'V7', quality: 'dom7', suffix: '7' },
+  { numeral: 'vim7', quality: 'min7', suffix: 'm7' },
+  { numeral: 'viiø7', quality: 'halfdim7', suffix: 'm7b5' },
+]
+
+const SEVENTH_STEPS = [0, 2, 4, 6] // scale degrees 1, 3, 5, 7
+
+export function diatonicSevenths(keyId) {
+  const key = keyById(keyId)
+  return SEVENTHS.map((entry, i) => {
+    const notes = SEVENTH_STEPS.map((step) => key.scale[(i + step) % 7])
+    const pitchClasses = SEVENTH_STEPS.map(
+      (step) => (key.tonic + MAJOR_STEPS[(i + step) % 7]) % 12,
+    )
+    return {
+      degree: i + 1,
+      rootPc: pitchClasses[0],
+      numeral: entry.numeral,
+      quality: entry.quality,
+      name: `${notes[0]}${entry.suffix}`,
+      notes,
+      pitchClasses,
+    }
+  })
+}

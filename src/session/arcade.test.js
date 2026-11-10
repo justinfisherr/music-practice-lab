@@ -1,18 +1,21 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  BREAK_MS,
   GRACE_MS,
   PERFECT_MS,
   RUN_CUES,
+  breakSweep,
   buildRun,
   gradeTiming,
   holdFor,
   intervalFor,
   multiplierFor,
   pointsFor,
+  startBreak,
   windowFor,
 } from './arcade.js'
-import { keyById } from '../data/scales.js'
+import { diatonicSevenths, keyById } from '../data/scales.js'
 
 const keyPcs = (keyId) => {
   const key = keyById(keyId)
@@ -43,18 +46,54 @@ test('bombs are always off-key, notes and chords are always in-key', () => {
           for (const pc of cue.pcs) assert.ok(pcs.includes(pc), 'cue must be in-scale')
         }
         if (cue.kind === 'chord') {
-          assert.ok(cue.pcs.length >= 2 && cue.pcs.length <= 3, 'chord lights 2 to 3 keys')
-          assert.equal(new Set(cue.pcs).size, cue.pcs.length, 'chord keys are distinct')
+          assert.equal(cue.pcs.length, 4, 'a chord cue is a seventh chord')
+          assert.equal(new Set(cue.pcs).size, 4, 'chord keys are distinct')
         }
       }
     }
   }
 })
 
-test('the first seven cues are playable, and bombs stay around one in five', () => {
+test('every chord cue is a seventh chord of the key, with an honest inversion', () => {
+  for (const seed of SEEDS) {
+    for (const keyId of KEYS) {
+      const pcs = keyPcs(keyId)
+      const sevenths = diatonicSevenths(keyId)
+      const cues = buildRun({ keyId, seed })
+      const chords = cues.filter((cue) => cue.kind === 'chord')
+      assert.ok(chords.length > 0, 'a run has at least one chord')
+      assert.ok(chords.length <= 3, 'chords stay rare')
+
+      for (const cue of chords) {
+        const chord = sevenths.find(
+          (candidate) =>
+            candidate.pitchClasses.length === cue.pcs.length &&
+            candidate.pitchClasses.every((pc) => cue.pcs.includes(pc)),
+        )
+        assert.ok(chord, `${cue.label} is not a diatonic seventh`)
+        for (const pc of cue.pcs) assert.ok(pcs.includes(pc), 'chord note leaves the key')
+        assert.equal(cue.numeral, chord.numeral)
+
+        // The label names the bass, and the sweep starts on that same key.
+        const spelled = cue.notesText.split(' ')
+        assert.deepEqual(spelled, chord.notes)
+        assert.equal(cue.label, `${chord.name}/${spelled[cue.inversion]}`)
+        assert.equal(cue.sweep[0], cue.pcs[cue.inversion])
+        assert.deepEqual([...cue.sweep].sort((a, b) => a - b), [...cue.pcs].sort((a, b) => a - b))
+      }
+
+      // Never two chords back to back.
+      for (let i = 1; i < cues.length; i++) {
+        assert.ok(!(cues[i].kind === 'chord' && cues[i - 1].kind === 'chord'))
+      }
+    }
+  }
+})
+
+test('the first seven cues are plain notes, and bombs stay around one in five', () => {
   for (const seed of SEEDS) {
     const cues = buildRun({ keyId: 'C', seed })
-    cues.slice(0, 7).forEach((cue) => assert.notEqual(cue.kind, 'bomb'))
+    cues.slice(0, 7).forEach((cue) => assert.equal(cue.kind, 'note'))
     const bombs = cues.filter((cue) => cue.kind === 'bomb').length
     assert.ok(bombs >= 6 && bombs <= 18, `${bombs} bombs in ${cues.length} cues`)
   }
@@ -100,8 +139,7 @@ test('a run is slow enough to read: 1600ms to 900ms, about a minute long', () =>
   }
 })
 
-test('the cue interval ramps 1600 to 900 over 45s and the hold is the interval', () => {
-  assert.equal(intervalFor(0), 1600)
+test('the cue interval ramps 1600 to 900 over 45s and the hold is the interval', () => {  assert.equal(intervalFor(0), 1600)
   assert.equal(intervalFor(15000), 1367)
   assert.equal(intervalFor(30000), 1133)
   assert.equal(intervalFor(45000), 900)
@@ -129,4 +167,63 @@ test('350ms is PERFECT, the last 450ms of the light still counts, at half points
   assert.equal(pointsFor('good'), 100)
   assert.equal(pointsFor('late'), 50)
   assert.equal(pointsFor('miss'), 0)
+})
+
+test('the chord break is 1320ms: 420ms of sweep plus 900ms held', () => {
+  assert.equal(BREAK_MS, 1320)
+})
+
+test('the break sweeps one key at a time, 140ms apart, then holds', () => {
+  assert.equal(breakSweep(0, 0), 1)
+  assert.equal(breakSweep(0, 139), 1)
+  assert.equal(breakSweep(0, 140), 2)
+  assert.equal(breakSweep(0, 279), 2)
+  assert.equal(breakSweep(0, 280), 3)
+  assert.equal(breakSweep(0, 420), 4)
+  assert.equal(breakSweep(0, BREAK_MS - 1), 4)
+})
+
+test('the break freezes the run: the chord and every later cue wait it out', () => {
+  const cues = buildRun({ keyId: 'C', seed: 1 }).map((cue) => ({ ...cue }))
+  let t = 5000
+  for (const cue of cues) {
+    cue.litAt = t
+    cue.darkAt = t + cue.hold
+    t += cue.hold
+  }
+  const index = cues.findIndex((cue) => cue.kind === 'chord')
+  const chord = cues[index]
+  const now = chord.litAt + 4
+  const run = { cues, break: null }
+
+  startBreak(run, chord, now)
+
+  assert.equal(run.break.cue, chord)
+  assert.equal(chord.litAt, now + BREAK_MS, 'the window opens after the break')
+  assert.equal(chord.darkAt, now + BREAK_MS + chord.hold)
+  assert.equal(cues[index + 1].litAt, chord.darkAt, 'the next cue still abuts it')
+  for (let i = 0; i < index; i++) assert.ok(cues[i].darkAt < now, 'past cues stay put')
+})
+
+test('breaks leave the rest of the run joined up, with no holes and no overlaps', () => {
+  for (const seed of SEEDS) {
+    for (const keyId of KEYS) {
+      const cues = buildRun({ keyId, seed }).map((cue) => ({ ...cue }))
+      let t = 2000
+      for (const cue of cues) {
+        cue.litAt = t
+        cue.darkAt = t + cue.hold
+        t += cue.hold
+      }
+      const run = { cues, break: null }
+      for (const cue of cues) if (cue.kind === 'chord') startBreak(run, cue, cue.litAt)
+
+      for (let i = 1; i < cues.length; i++) {
+        const gap = cues[i].litAt - cues[i - 1].darkAt
+        assert.ok(gap >= 0, `cue ${i} overlaps the one before it`)
+        assert.ok(gap === 0 || gap === BREAK_MS, `cue ${i} leaves a ${gap}ms hole`)
+        if (gap > 0) assert.equal(cues[i].kind, 'chord', 'only a break holds a gap')
+      }
+    }
+  }
 })

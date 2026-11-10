@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import PianoKeys from './PianoKeys.jsx'
 import { useNoteSequence } from '../hooks/useNoteSequence.js'
-import { noteName } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
 import { laDate, seedFor, tonightKey } from '../session/tonight.js'
 import {
+  CLEAR_MS,
   CUE_WORD_MS,
   RUN_CUES,
   bestScore,
+  breakSweep,
   buildRun,
   gradeTiming,
   multiplierFor,
   pointsFor,
   saveBest,
+  startBreak,
 } from '../session/arcade.js'
 import {
   isMuted,
@@ -51,7 +53,18 @@ function pushCue(run, tone, now) {
   run.cue = { id: run.cueSeq, tone, text: CUE_WORD[tone], combo: run.streak, until: now + CUE_WORD_MS }
 }
 
-const EMPTY = { lit: {}, cue: null, next: null, score: 0, streak: 0, hits: 0, misses: 0, index: 0 }
+const EMPTY = {
+  lit: {},
+  cue: null,
+  break: null,
+  clear: null,
+  next: null,
+  score: 0,
+  streak: 0,
+  hits: 0,
+  misses: 0,
+  index: 0,
+}
 
 export default function Falling({ onExit }) {
   const [phase, setPhase] = useState('ready')
@@ -69,16 +82,25 @@ export default function Falling({ onExit }) {
   const keyIdRef = useRef(tonightKey())
   phaseRef.current = phase
 
-  const publish = useCallback((run) => {
+  const publish = useCallback((run, now) => {
     const lit = {}
     if (run.active) {
       for (const pc of run.active.pcs) if (!run.active.pressed.has(pc)) lit[pc] = run.active.kind
+    }
+    let breaking = null
+    if (run.break) {
+      const { cue, start } = run.break
+      const swept = breakSweep(start, now)
+      for (let i = 0; i < swept; i++) lit[cue.sweep[i]] = 'chord'
+      breaking = { name: cue.label, numeral: cue.numeral, notes: cue.notesText }
     }
     const upcoming = run.cues[run.cursor]
     setView({
       lit,
       cue: run.cue,
-      next: upcoming ? upcoming.pcs : null,
+      break: breaking,
+      clear: run.clear ? run.clear.label : null,
+      next: upcoming ? (upcoming.kind === 'chord' ? upcoming.label : '1 NOTE') : null,
       score: run.score,
       streak: run.streak,
       hits: run.hits,
@@ -126,8 +148,12 @@ export default function Falling({ onExit }) {
       const cue = run.cues[run.cursor++]
       // A stalled frame can arrive after the whole light: grade it, move on.
       if (now < cue.darkAt) {
-        run.active = cue
-        if (!isMuted()) playChord(cue.pcs, { duration: 0.4 })
+        if (cue.kind === 'chord') {
+          startBreak(run, cue, now)
+        } else {
+          run.active = cue
+          if (!isMuted()) playChord(cue.pcs, { duration: 0.4 })
+        }
         dirty = true
         break
       }
@@ -148,15 +174,36 @@ export default function Falling({ onExit }) {
     const run = runRef.current
     if (!run || run.ended || phaseRef.current !== 'run') return
     const now = performance.now()
-    let dirty = advance(run, now)
+    let dirty = false
+
+    if (run.break) {
+      // The break holds the clock: the sweep advances, nothing grades.
+      const swept = breakSweep(run.break.start, now)
+      if (swept !== run.break.swept) {
+        run.break.swept = swept
+        dirty = true
+      }
+      if (now >= run.break.until) {
+        run.active = run.break.cue
+        run.break = null
+        if (!isMuted()) playChord(run.active.pcs, { duration: 0.5 })
+        dirty = true
+      }
+    } else {
+      dirty = advance(run, now)
+    }
 
     if (run.cue && now >= run.cue.until) {
       run.cue = null
       dirty = true
     }
+    if (run.clear && now >= run.clear.until) {
+      run.clear = null
+      dirty = true
+    }
 
     if (dirty) publish(run, now)
-    if (run.cursor >= run.cues.length && !run.active) finish()
+    if (run.cursor >= run.cues.length && !run.active && !run.break) finish()
   }, [advance, publish, finish])
 
   useEffect(() => {
@@ -188,7 +235,12 @@ export default function Falling({ onExit }) {
       cue.litAt += hidden
       cue.darkAt += hidden
     }
+    if (run.break) {
+      run.break.start += hidden
+      run.break.until += hidden
+    }
     if (run.cue) run.cue.until += hidden
+    if (run.clear) run.clear.until += hidden
     setLeaveAsk(false)
     setPhase('run')
     publish(run, performance.now())
@@ -216,6 +268,8 @@ export default function Falling({ onExit }) {
       cues,
       cursor: 0,
       active: null,
+      break: null,
+      clear: null,
       cue: null,
       cueSeq: 0,
       pausedAt: 0,
@@ -231,7 +285,7 @@ export default function Falling({ onExit }) {
     setSummary(null)
     setLeaveAsk(false)
     setCountWord(0)
-    setView({ ...EMPTY, next: cues[0].pcs })
+    setView({ ...EMPTY, next: cues[0].kind === 'chord' ? cues[0].label : '1 NOTE' })
     setPhase('count')
     unlockAudio() // iOS only opens the context inside a real gesture
     playCountIn(100, 4)
@@ -257,6 +311,7 @@ export default function Falling({ onExit }) {
     (pc) => {
       const run = runRef.current
       if (!run || run.ended || phaseRef.current !== 'run') return
+      if (run.break) return // the break teaches; it never grades
       const now = performance.now()
       advance(run, now) // the next cue may have taken over this instant
       const active = run.active
@@ -290,9 +345,20 @@ export default function Falling({ onExit }) {
       run.streak += 1
       run.bestStreak = Math.max(run.bestStreak, run.streak)
       run.hits += 1
-      pushCue(run, timing === 'late' ? 'good' : timing, now)
 
-      if (active.pressed.size === active.pcs.length) run.active = null
+      if (active.pressed.size === active.pcs.length) {
+        run.active = null
+        // A finished chord gets its name stamped back instead of a grade word.
+        if (active.kind === 'chord') {
+          run.cue = null
+          run.clear = { label: active.label, until: now + CLEAR_MS }
+        } else {
+          pushCue(run, timing === 'late' ? 'good' : timing, now)
+        }
+      } else {
+        pushCue(run, timing === 'late' ? 'good' : timing, now)
+      }
+
       publish(run, now)
     },
     [advance, publish],
@@ -400,11 +466,26 @@ export default function Falling({ onExit }) {
               </div>
               <div className="arcade__next">
                 <span className="arcade__nextlabel">NEXT</span>
-                <span className="arcade__nextname">
-                  {view.next ? view.next.map(noteName).join(' ') : '—'}
-                </span>
+                <span className="arcade__nextname">{view.next ?? '—'}</span>
               </div>
             </div>
+
+            {view.break ? (
+              <div className="arcade__break">
+                <span className="arcade__breakname">{view.break.name}</span>
+                <span className="arcade__breakrule" aria-hidden="true" />
+                <span className="arcade__breaknum">{view.break.numeral}</span>
+                <span className="arcade__breaknotes">{view.break.notes}</span>
+              </div>
+            ) : null}
+
+            {view.clear ? (
+              <div className="arcade__break arcade__break--clear">
+                <span className="arcade__breakname">{view.clear}</span>
+                <span className="arcade__breakrule" aria-hidden="true" />
+                <span className="arcade__breakclear">CLEAR</span>
+              </div>
+            ) : null}
 
             {phase === 'ready' ? (
               <div className="arcade__ready">
@@ -454,11 +535,15 @@ export default function Falling({ onExit }) {
       <p className="arcade__live" aria-live="polite">
         {phase === 'count'
           ? COUNT_WORDS[countWord]
-          : view.cue
-            ? view.cue.text
-            : summary
-              ? `Run over. Score ${summary.score}. Accuracy ${summary.accuracy} percent.`
-              : ''}
+          : view.break
+            ? `Chord ${view.break.name}. ${view.break.numeral}. ${view.break.notes}.`
+            : view.clear
+              ? `${view.clear} clear.`
+              : view.cue
+                ? view.cue.text
+                : summary
+                  ? `Run over. Score ${summary.score}. Accuracy ${summary.accuracy} percent.`
+                  : ''}
       </p>
     </section>
   )
