@@ -67,8 +67,8 @@ test('grade windows never overlap', () => {
 
 test('the ramp floors at 330ms and the multiplier climbs', () => {
   assert.equal(intervalFor(0), 600)
-  assert.equal(intervalFor(45000), 330)
-  assert.equal(intervalFor(90000), 330)
+  assert.equal(intervalFor(20000), 330)
+  assert.equal(intervalFor(60000), 330)
   assert.equal(multiplierFor(0), 1)
   assert.equal(multiplierFor(12), 4)
 })

@@ -12,12 +12,12 @@ export const BEST_KEY = 'mpl.arcade.falling.best'
 
 const BASE_MS = 600
 const FLOOR_MS = 330
-const RAMP_MS = 45000
+const RAMP_MS = 20000
 const CHORD_ODDS = 1 / 7
 const MAX_CHORDS = 3
 const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11]
 
-// 600ms between notes at the start, 330ms once the run is 45s old, then flat.
+// 600ms between notes at the start, 330ms once the run is 20s old, then flat.
 export function intervalFor(elapsedMs) {
   if (!(elapsedMs > 0)) return BASE_MS
   if (elapsedMs >= RAMP_MS) return FLOOR_MS
