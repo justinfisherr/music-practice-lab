@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNoteSequence } from '../hooks/useNoteSequence.js'
-import NotePad from './NotePad.jsx'
 import { noteName } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
 import { laDate, seedFor, tonightKey } from '../session/tonight.js'
@@ -8,20 +7,34 @@ import {
   CHORD_STEP_MS,
   FALL_MS,
   HIT_MS,
+  RUN_NOTES,
   RUN_MS,
   bestScore,
   buildRun,
+  deltaFor,
   grade,
+  gradeTiming,
   multiplierFor,
   saveBest,
 } from '../session/arcade.js'
 import { isMuted, playCountIn, setMuted, unlockAudio } from '../session/audio.js'
 
-// Prototype: does a falling-note game feel good on a phone with the 12-key pad?
-// Throwaway on purpose: no ledger row, no session, no API call.
+// Prototype: the falling block is the tap target. No ledger row, no session,
+// no API call. A MIDI keyboard still feeds the same graders.
 
 const COUNT_WORDS = ['READY', '3', '2', '1', 'GO']
 const COUNT_MS = 600
+const CUE_MS = 360 // 90 slam, 120 hold, 150 out
+const CHORD_ROW = 20
+
+const CUE_WORD = {
+  perfect: 'PERFECT',
+  good: 'GOOD',
+  miss: 'MISS',
+  bomb: 'BOMB',
+  ok: 'OK',
+  stray: 'STRAY',
+}
 
 function clock(ms) {
   const total = Math.min(60, Math.floor(ms / 1000))
@@ -35,23 +48,6 @@ function say(summary) {
   return 'YOU PLAYED THE WRONG SCALE.'
 }
 
-// The one note due next gets the pad hint; two hard states, no animation.
-// Reduced motion gets it with the note and keeps it static.
-function nearestHint(run, now, reduced) {
-  let best = null
-  for (const event of run.visible) {
-    if (event.status) continue
-    if (!reduced && event.arrival - now > 300) continue
-    if (!best || event.arrival < best.arrival) best = event
-  }
-  if (!best) return { hint: null, sig: '' }
-  const bar = !reduced && best.arrival - now <= 120
-  return {
-    hint: { pcs: best.remaining.length ? best.remaining : best.pcs, bar },
-    sig: `${best.id}:${bar ? 'b' : 'o'}`,
-  }
-}
-
 function onLine(run, now) {
   return run.visible.find((event) => !event.status && now >= event.start && now <= event.end) || null
 }
@@ -60,17 +56,51 @@ function nextUp(run, now) {
   return run.visible.find((event) => !event.status && event.arrival > now) || null
 }
 
+// One word at a time, replaced by the next grade.
+function pushCue(run, tone, now) {
+  run.cueSeq += 1
+  run.cue = { id: run.cueSeq, tone, text: CUE_WORD[tone], combo: run.streak, until: now + CUE_MS }
+}
+
+function resolveTap(run, event, now) {
+  if (event.kind === 'bomb') {
+    event.status = 'bomb'
+    event.goneAt = now + 300
+    run.score -= 250
+    run.streak = 0
+    run.bombsHit += 1
+    pushCue(run, 'bomb', now)
+    return
+  }
+  const timing = gradeTiming(deltaFor(event, now - run.startedAt))
+  if (timing === 'miss') {
+    event.status = 'miss'
+    event.goneAt = now
+    run.streak = 0
+    run.misses += 1
+    pushCue(run, 'miss', now)
+    return
+  }
+  run.score += 100 * multiplierFor(run.streak)
+  run.hits += 1
+  run.streak += 1
+  run.bestStreak = Math.max(run.bestStreak, run.streak)
+  event.status = 'hit'
+  event.goneAt = now + 180
+  pushCue(run, timing, now)
+}
+
 export default function Falling({ onExit }) {
   const [phase, setPhase] = useState('ready')
   const [view, setView] = useState({
     notes: [],
-    stamps: [],
+    cue: null,
     score: 0,
     streak: 0,
     hits: 0,
     misses: 0,
-    hint: null,
-    static: null,
+    line: null,
+    next: null,
   })
   const [elapsed, setElapsed] = useState(0)
   const [countWord, setCountWord] = useState(0)
@@ -89,7 +119,6 @@ export default function Falling({ onExit }) {
   const reducedRef = useRef(reduced)
   const rafRef = useRef(0)
   const timersRef = useRef([])
-  const stampId = useRef(0)
   const attemptRef = useRef(0)
   const fieldRef = useRef(null)
   const keyIdRef = useRef(tonightKey())
@@ -119,8 +148,6 @@ export default function Falling({ onExit }) {
   }, [])
 
   const publish = useCallback((run, now) => {
-    const { hint, sig } = nearestHint(run, now, reducedRef.current)
-    run.hintSig = sig
     const line = reducedRef.current ? onLine(run, now) : null
     setView({
       notes: run.visible.map((event) => ({
@@ -129,23 +156,15 @@ export default function Falling({ onExit }) {
         pcs: event.pcs,
         status: event.status,
         delay: event.delay,
-        col0: event.kind === 'chord' ? Math.min(...event.pcs.map((pc) => pc % 4)) : event.column,
-        col1: event.kind === 'chord' ? Math.max(...event.pcs.map((pc) => pc % 4)) : event.column,
+        column: event.column,
       })),
-      stamps: run.stamps.map((stamp) => ({
-        id: stamp.id,
-        text: stamp.text,
-        tone: stamp.tone,
-        column: stamp.column,
-      })),
+      cue: run.cue,
       score: run.score,
       streak: run.streak,
       hits: run.hits,
       misses: run.misses,
-      hint,
-      static: reducedRef.current
-        ? { line: line?.pcs || null, next: nextUp(run, now)?.pcs || null, quarter: run.quarter || 0 }
-        : null,
+      line: line ? { id: line.id, pcs: line.pcs } : null,
+      next: reducedRef.current ? (nextUp(run, now)?.pcs ?? null) : null,
     })
   }, [])
 
@@ -185,12 +204,13 @@ export default function Falling({ onExit }) {
         // Letting a bomb through is the correct play.
         event.status = 'ok'
         event.goneAt = now + 200
-        run.stamps.push({ id: stampId.current++, text: 'OK', tone: 'ok', column: event.column, until: now + 200 })
+        pushCue(run, 'ok', now)
       } else {
         event.status = 'miss'
         event.goneAt = now + 220
         run.streak = 0
-        run.misses += event.remaining.length
+        run.misses += 1
+        pushCue(run, 'miss', now)
       }
       dirty = true
     }
@@ -199,23 +219,22 @@ export default function Falling({ onExit }) {
     run.visible = run.visible.filter((event) => !event.goneAt || now < event.goneAt)
     if (run.visible.length !== before) dirty = true
 
-    const stampCount = run.stamps.length
-    run.stamps = run.stamps.filter((stamp) => now < stamp.until)
-    if (run.stamps.length !== stampCount) dirty = true
+    if (run.cue && now >= run.cue.until) {
+      run.cue = null
+      dirty = true
+    }
 
+    // Reduced motion draws only the line and the next note, so those two swaps
+    // are the only thing that changes between frames.
     if (reducedRef.current) {
-      const line = onLine(run, now)
-      const quarter = line
-        ? Math.min(4, Math.max(1, Math.ceil((now - line.start) / ((line.end - line.start) / 4))))
-        : 0
-      if (quarter !== run.quarter) {
-        run.quarter = quarter
+      const lineId = onLine(run, now)?.id ?? 0
+      const nextId = nextUp(run, now)?.id ?? 0
+      if (lineId !== run.lineId || nextId !== run.nextId) {
+        run.lineId = lineId
+        run.nextId = nextId
         dirty = true
       }
     }
-
-    // The hint flips twice per note, off the spawn/miss beat.
-    if (nearestHint(run, now, reducedRef.current).sig !== run.hintSig) dirty = true
 
     if (dirty) publish(run, now)
 
@@ -267,10 +286,12 @@ export default function Falling({ onExit }) {
       event.end += hidden
       if (!event.status) event.delay = Math.round(event.arrival - FALL_MS - now)
     }
+    run.cue = null
     setLeaveAsk(false)
     setRunKey((value) => value + 1)
     setPhase('run')
-  }, [])
+    publish(run, now)
+  }, [publish])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -290,7 +311,6 @@ export default function Falling({ onExit }) {
       (event, id) => ({
         ...event,
         id,
-        remaining: event.pcs.slice(),
         status: null,
         goneAt: 0,
         delay: 0,
@@ -302,7 +322,8 @@ export default function Falling({ onExit }) {
       events,
       cursor: 0,
       visible: [],
-      stamps: [],
+      cue: null,
+      cueSeq: 0,
       startedAt: 0,
       pausedAt: 0,
       score: 0,
@@ -311,15 +332,24 @@ export default function Falling({ onExit }) {
       hits: 0,
       misses: 0,
       bombsHit: 0,
-      quarter: 0,
-      hintSig: '',
+      lineId: 0,
+      nextId: 0,
       ended: false,
     }
     setSummary(null)
     setElapsed(0)
     setLeaveAsk(false)
     setCountWord(0)
-    setView({ notes: [], stamps: [], score: 0, streak: 0, hits: 0, misses: 0, hint: null, static: null })
+    setView({
+      notes: [],
+      cue: null,
+      score: 0,
+      streak: 0,
+      hits: 0,
+      misses: 0,
+      line: null,
+      next: null,
+    })
     setPhase('count')
     unlockAudio()
     playCountIn(100, 4)
@@ -342,67 +372,45 @@ export default function Falling({ onExit }) {
     )
   }, [])
 
-  function flashKey(pc) {
-    const key = fieldRef.current?.closest('.arcade')?.querySelectorAll('.notepad__key')[pc]
-    if (!key) return
-    key.classList.add('is-flash')
-    timersRef.current.push(setTimeout(() => key.classList.remove('is-flash'), 90))
-  }
-
-  const tap = useCallback(
-    (pc) => {
+  // Tapping a block grades that block. Anything else in the field is a stray.
+  const tapBlock = useCallback(
+    (id) => {
       const run = runRef.current
       if (!run || run.ended || phaseRef.current !== 'run') return
       const now = performance.now()
-      const found = grade(run.events, pc, now - run.startedAt, (event) => event.status !== null)
-
-      if (!found.event) {
+      const event = id == null ? null : run.visible.find((row) => row.id === id && !row.status)
+      if (!event) {
         run.streak = 0
-        run.stamps.push({
-          id: stampId.current++,
-          text: 'STRAY',
-          tone: 'stray',
-          column: pc % 4,
-          until: now + 200,
-        })
+        pushCue(run, 'stray', now)
         publish(run, now)
         return
       }
-
-      const event = found.event
-      if (found.result === 'bomb') {
-        event.status = 'bomb'
-        event.goneAt = now + 300
-        run.score -= 250
-        run.streak = 0
-        run.bombsHit += 1
-        flashKey(pc)
-      } else {
-        const multiplier = multiplierFor(run.streak)
-        const points = 100 * multiplier
-        run.score += points
-        run.hits += 1
-        run.streak += 1
-        run.bestStreak = Math.max(run.bestStreak, run.streak)
-        event.remaining = event.remaining.filter((value) => value !== pc)
-        if (!event.remaining.length) {
-          event.status = 'hit'
-          event.goneAt = now + 180
-        }
-        run.stamps.push({
-          id: stampId.current++,
-          text: `+${points} Ã—${multiplier}`,
-          tone: 'hit',
-          column: event.column,
-          until: now + 180,
-        })
-      }
+      resolveTap(run, event, now)
       publish(run, now)
     },
     [publish],
   )
 
-  useNoteSequence({ active: phase === 'run', onNote: tap })
+  // Keyboard input keeps working at the desk: a pitch class finds its block.
+  const tapPc = useCallback(
+    (pc) => {
+      const run = runRef.current
+      if (!run || run.ended || phaseRef.current !== 'run') return
+      const now = performance.now()
+      const found = grade(run.events, pc, now - run.startedAt, (event) => event.status !== null)
+      if (!found.event) {
+        run.streak = 0
+        pushCue(run, 'stray', now)
+        publish(run, now)
+        return
+      }
+      resolveTap(run, found.event, now)
+      publish(run, now)
+    },
+    [publish],
+  )
+
+  useNoteSequence({ active: phase === 'run', onNote: tapPc })
 
   function toggleSound() {
     const next = !sound
@@ -444,7 +452,7 @@ export default function Falling({ onExit }) {
           <span className="arcade__statlabel">SCORE</span>
           <span className="arcade__statval">{view.score}</span>
         </span>
-        <span className="arcade__mult">Ã—{multiplierFor(view.streak)}</span>
+        <span className="arcade__mult">×{multiplierFor(view.streak)}</span>
         <span className="arcade__stat arcade__stat--right">
           <span className="arcade__statlabel">ACCURACY</span>
           <span className="arcade__statval">{accuracy}%</span>
@@ -486,20 +494,29 @@ export default function Falling({ onExit }) {
           </div>
         </div>
       ) : (
-        <div className={`arcade__field${phase === 'paused' ? ' is-paused' : ''}`} ref={measure}>
+        <div
+          className={`arcade__field${phase === 'paused' ? ' is-paused' : ''}`}
+          ref={measure}
+          onPointerDown={(event) => {
+            const node = event.target.closest?.('.arcade__note')
+            tapBlock(node ? Number(node.dataset.id) : null)
+          }}
+        >
           <div className="arcade__lane" key={runKey} aria-hidden="true">
             {reduced
               ? null
               : view.notes.map((note) => (
                   <div
                     key={note.id}
+                    data-id={note.id}
                     className={`arcade__note${note.kind === 'chord' ? ' arcade__note--chord' : ''}${
                       note.status ? ` is-${note.status}` : ''
                     }`}
                     style={{
-                      gridColumn: `${note.col0 + 1} / ${note.col1 + 2}`,
+                      gridColumn: `${note.column + 1}`,
                       animationDelay: `${note.delay}ms`,
-                      height: note.kind === 'chord' ? `${note.pcs.length * 22 + 12}px` : undefined,
+                      height:
+                        note.kind === 'chord' ? `${note.pcs.length * CHORD_ROW + 16}px` : undefined,
                     }}
                   >
                     <span className="arcade__name">
@@ -524,48 +541,45 @@ export default function Falling({ onExit }) {
               <div className="arcade__next">
                 <span className="arcade__staticlabel">NEXT</span>
                 <span className="arcade__staticname">
-                  {view.static?.next ? view.static.next.map(noteName).join(' ') : 'â€”'}
+                  {view.next ? view.next.map(noteName).join(' ') : '—'}
                 </span>
               </div>
-              <div className="arcade__online">
-                <span className="arcade__staticlabel">ON THE LINE</span>
-                <span className="arcade__onlinename">
-                  {view.static?.line ? view.static.line.map(noteName).join(' ') : 'â€”'}
-                </span>
-              </div>
-              <div className="arcade__segments" aria-hidden="true">
-                {[1, 2, 3, 4].map((step) => (
-                  <span
-                    key={step}
-                    className={`arcade__segment${(view.static?.quarter || 0) >= step ? ' is-on' : ''}`}
-                  />
-                ))}
-              </div>
+              {view.line ? (
+                <div className="arcade__note arcade__note--static" data-id={view.line.id}>
+                  <span className="arcade__name">
+                    {view.line.pcs.map((pc) => (
+                      <span key={pc} className="arcade__pc">
+                        {noteName(pc)}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
-          <div className="arcade__stamps" aria-hidden="true">
-            {view.stamps.map((stamp) => (
-              <span
-                key={stamp.id}
-                className={`arcade__stamp arcade__stamp--${stamp.tone}`}
-                style={{ gridColumn: `${stamp.column + 1}` }}
-              >
-                {stamp.text}
-              </span>
-            ))}
-          </div>
-
-          <div className="arcade__tray" aria-hidden="true" />
+          {view.cue ? (
+            <div
+              key={view.cue.id}
+              className={`arcade__cue arcade__cue--${view.cue.tone}${
+                view.cue.combo >= 5 ? ' is-hot' : ''
+              }`}
+              aria-hidden="true"
+            >
+              <span className="arcade__cueword">{view.cue.text}</span>
+              {view.cue.combo >= 2 ? <span className="arcade__combo">×{view.cue.combo}</span> : null}
+            </div>
+          ) : null}
 
           {phase === 'ready' ? (
             <div className="arcade__ready">
-              <span className="arcade__eyebrow">TEST Â· FALLING NOTES</span>
-              <span className="arcade__readytitle">TAP THE NOTE ON THE LINE.</span>
-              <p className="arcade__readycopy">
-                Notes in {keyDisplay(keyIdRef.current)} major are yours. Off-scale notes are bombs:
-                let them through. Anything else is a stray.
-              </p>
+              <span className="arcade__eyebrow">TEST · FALLING NOTES</span>
+              <span className="arcade__readytitle">
+                TAP THE NOTE IF IT'S IN THE KEY. LET THE REST THROUGH.
+              </span>
+              <span className="arcade__eyebrow">
+                {RUN_NOTES} NOTES · 60 SECONDS · {keyDisplay(keyIdRef.current)} MAJOR
+              </span>
               <button type="button" className="arcade__start" onClick={start}>
                 START
               </button>
@@ -602,14 +616,12 @@ export default function Falling({ onExit }) {
       <p className="arcade__live" aria-live="polite">
         {phase === 'count'
           ? COUNT_WORDS[countWord]
-          : summary
-            ? `Run over. Score ${summary.score}. Accuracy ${summary.accuracy} percent.`
-            : ''}
+          : view.cue
+            ? view.cue.text
+            : summary
+              ? `Run over. Score ${summary.score}. Accuracy ${summary.accuracy} percent.`
+              : ''}
       </p>
-
-      <p className="arcade__land">TURN THE PHONE UPRIGHT.</p>
-
-      <NotePad keyId={keyIdRef.current} disabled={phase !== 'run'} hint={phase === 'run' ? view.hint : null} />
     </section>
   )
 }

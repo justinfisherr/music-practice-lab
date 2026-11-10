@@ -8,16 +8,18 @@ export const RUN_MS = 60000
 export const FALL_MS = 900
 export const HIT_MS = 140 // early/late window around the hit line
 export const CHORD_STEP_MS = 90 // each extra chord note widens the window
+export const PERFECT_MS = 70
+export const GOOD_MS = 160
 export const BEST_KEY = 'mpl.arcade.falling.best'
 
-const BASE_MS = 600
-const FLOOR_MS = 330
-const RAMP_MS = 20000
+const BASE_MS = 850
+const FLOOR_MS = 420
+const RAMP_MS = 30000
 const CHORD_ODDS = 1 / 7
 const MAX_CHORDS = 3
 const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11]
 
-// 600ms between notes at the start, 330ms once the run is 20s old, then flat.
+// 850ms between notes at the start, 420ms once the run is 30s old, then flat.
 export function intervalFor(elapsedMs) {
   if (!(elapsedMs > 0)) return BASE_MS
   if (elapsedMs >= RAMP_MS) return FLOOR_MS
@@ -47,6 +49,20 @@ export function grade(events, pc, at, done = () => false) {
   }
   if (!best) return { event: null, result: 'stray' }
   return { event: best, result: best.kind === 'bomb' ? 'bomb' : 'hit' }
+}
+
+// Graded to the middle of the window, so a chord's extra span does not count
+// against the one tap that clears it.
+export function deltaFor(event, at) {
+  const extra = event.kind === 'chord' ? CHORD_STEP_MS * (event.pcs.length - 1) : 0
+  return at - (event.t + extra / 2)
+}
+
+export function gradeTiming(delta) {
+  const off = Math.abs(delta)
+  if (off <= PERFECT_MS) return 'perfect'
+  if (off <= GOOD_MS) return 'good'
+  return 'miss'
 }
 
 export function bestScore() {

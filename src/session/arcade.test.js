@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildRun, windowFor, intervalFor, multiplierFor } from './arcade.js'
+import { buildRun, windowFor, intervalFor, multiplierFor, deltaFor, gradeTiming } from './arcade.js'
 import { keyById } from '../data/scales.js'
 
 const keyPcs = (keyId) => {
@@ -65,10 +65,25 @@ test('grade windows never overlap', () => {
   }
 })
 
-test('the ramp floors at 330ms and the multiplier climbs', () => {
-  assert.equal(intervalFor(0), 600)
-  assert.equal(intervalFor(20000), 330)
-  assert.equal(intervalFor(60000), 330)
+test('the ramp floors at 420ms and the multiplier climbs', () => {
+  assert.equal(intervalFor(0), 850)
+  assert.equal(intervalFor(15000), 635)
+  assert.equal(intervalFor(30000), 420)
+  assert.equal(intervalFor(60000), 420)
   assert.equal(multiplierFor(0), 1)
   assert.equal(multiplierFor(12), 4)
+})
+
+test('timing grade bands are 70ms and 160ms, measured to the window middle', () => {
+  assert.equal(gradeTiming(0), 'perfect')
+  assert.equal(gradeTiming(-70), 'perfect')
+  assert.equal(gradeTiming(71), 'good')
+  assert.equal(gradeTiming(-160), 'good')
+  assert.equal(gradeTiming(161), 'miss')
+
+  const note = { t: 1000, pcs: [0], kind: 'note' }
+  assert.equal(deltaFor(note, 930), -70)
+  const chord = { t: 1000, pcs: [0, 4, 7], kind: 'chord' }
+  assert.equal(deltaFor(chord, 1090), 0)
+  assert.equal(deltaFor(chord, 1000), -90)
 })

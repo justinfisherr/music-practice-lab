@@ -5640,13 +5640,15 @@ button.artistcard__hint:focus-visible {
 }
 
 /* ---- Falling-note prototype: #test/falling. Throwaway surface. ---- */
+/* The block is the button: no pad, the field is the whole input. */
 .arcade {
   --arcade-bar: 52px;
   --arcade-hud: 40px;
-  --arcade-tray: 56px;
   --fall-ms: 900ms;
-  --note-h: 44px;
-  --chord-row: 22px;
+  --note-h: 56px;
+  --chord-row: 20px;
+  --cue-size: 56px;
+  --combo-size: 20px;
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -5654,9 +5656,9 @@ button.artistcard__hint:focus-visible {
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
+  padding-bottom: var(--safe-b);
   background: var(--bg);
   color: var(--ink);
-  padding-bottom: calc(var(--pad-h) + var(--safe-b));
 }
 
 .arcade__bar {
@@ -5730,20 +5732,29 @@ button.artistcard__hint:focus-visible {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .arcade__field--summary {
   overflow-y: auto;
 }
 
-/* The lane uses the pad's own grid, so column N sits over key N. */
+/* The lane ends on the hit rule; the bottom third is a dead zone, so the block
+   you are tapping stays above your thumb. */
 .arcade__lane {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(var(--field-h, 0px) * 0.68);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--pad-gap);
   padding-inline: 8px;
   overflow: hidden;
+  border-bottom: 3px solid var(--ink);
 }
 .arcade__note {
   position: absolute;
@@ -5762,6 +5773,12 @@ button.artistcard__hint:focus-visible {
   box-shadow: 2px 2px 0 var(--ink);
   animation: arcade-fall var(--fall-ms) linear both;
 }
+/* 12px of invisible padding: a moving target needs a bigger box than a static one. */
+.arcade__note::after {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
+}
 .arcade__note--chord {
   flex-direction: column;
   font-size: 13px;
@@ -5774,11 +5791,7 @@ button.artistcard__hint:focus-visible {
 .arcade__note--chord .arcade__pc {
   line-height: var(--chord-row);
 }
-.arcade__note.is-miss {
-  background: var(--ink);
-  color: var(--bg);
-  animation: arcade-miss 90ms linear both;
-}
+.arcade__note.is-miss,
 .arcade__note.is-hit,
 .arcade__note.is-bomb {
   background: var(--ink);
@@ -5788,8 +5801,9 @@ button.artistcard__hint:focus-visible {
   border-color: var(--signal);
 }
 
-/* A backgrounded tab freezes the field, notes and stamps alike. */
-.arcade__field.is-paused .arcade__note {
+/* A backgrounded tab freezes the field, notes and cue alike. */
+.arcade__field.is-paused .arcade__note,
+.arcade__field.is-paused .arcade__cue {
   animation-play-state: paused;
 }
 
@@ -5797,86 +5811,24 @@ button.artistcard__hint:focus-visible {
   from {
     transform: translateY(-100%);
   }
+  /* The block's bottom lands on the lane's 3px hit rule. */
   to {
-    transform: translateY(calc(var(--field-h, 0px) - var(--arcade-tray) - 100%));
-  }
-}
-@keyframes arcade-miss {
-  from {
-    transform: translateY(calc(var(--field-h, 0px) - var(--arcade-tray) - 100%));
-  }
-  to {
-    transform: translateY(calc(var(--field-h, 0px) - 100%));
+    transform: translateY(calc(var(--field-h, 0px) * 0.68 - 3px - 100%));
   }
 }
 
-/* Everything past the line is cropped by this band. */
-.arcade__tray {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--arcade-tray);
-  border-top: 3px solid var(--ink);
-  background: var(--bg);
-  z-index: 2;
-}
-
-.arcade__stamps {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--pad-gap);
-  padding-inline: 8px;
-  padding-bottom: calc(var(--arcade-tray) + 8px);
-  align-items: end;
-  pointer-events: none;
-  z-index: 3;
-}
-.arcade__stamp {
-  justify-self: center;
-  transform: translateY(-8px);
-  border: 2px solid var(--ink);
-  padding: 1px 6px;
-  background: var(--bg);
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  white-space: nowrap;
-}
-.arcade__stamp--hit {
-  background: var(--ink);
-  color: var(--bg);
-  font-size: 16px;
-}
-.arcade__stamp--ok {
-  border: 0;
-  padding: 0;
-  background: none;
-  color: var(--ok-ink);
-  font-size: 14px;
-}
-.arcade__stamp--stray {
-  color: var(--signal-ink);
-}
-
-/* Reduced motion: no travel, a static read of the same information. */
+/* Reduced motion: no travel, one static block sitting on the line. */
 .arcade__static {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 8px 8px calc(var(--arcade-tray) + 8px);
+  padding: 8px;
   z-index: 1;
 }
 .arcade__next {
-  flex: 0 0 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: 44px;
   padding: 0 10px;
   border: 3px solid var(--ink);
   background: var(--panel);
@@ -5892,33 +5844,70 @@ button.artistcard__hint:focus-visible {
   font-weight: 800;
   color: var(--muted);
 }
-.arcade__online {
-  flex: 0 0 96px;
+.arcade__note--static {
+  left: 8px;
+  right: 8px;
+  top: calc(var(--field-h, 0px) * 0.68 - 3px - var(--note-h));
+  animation: none;
+}
+
+/* The one big word: upper third, opaque, colour flip only. */
+.arcade__cue {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 34%;
+  z-index: 3;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 0 10px;
-  border: 3px solid var(--ink);
-  background: var(--panel);
+  gap: 2px;
+  pointer-events: none;
+  animation: arcade-cue 360ms linear both;
 }
-.arcade__onlinename {
-  font-size: 32px;
+.arcade__cue--perfect,
+.arcade__cue--good,
+.arcade__cue--ok {
+  background: var(--ink);
+  color: var(--bg);
+}
+.arcade__cue--miss,
+.arcade__cue--bomb,
+.arcade__cue--stray {
+  background: var(--bg);
+  border: 3px solid var(--signal);
+  color: var(--signal-ink);
+}
+.arcade__cueword {
+  font-size: var(--cue-size);
   font-weight: 800;
+  letter-spacing: 2px;
+  line-height: 0.9;
+}
+.arcade__combo {
+  font-size: var(--combo-size);
+  font-weight: 800;
+  letter-spacing: 2px;
   line-height: 1;
 }
-.arcade__segments {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 2px;
-  height: 8px;
-  margin-top: auto;
+/* A hot streak grows a rule, not a new animation. */
+.arcade__cue.is-hot .arcade__combo {
+  padding-top: 3px;
+  border-top: 3px solid currentColor;
 }
-.arcade__segment {
-  background: var(--heat-1);
-}
-.arcade__segment.is-on {
-  background: var(--ink);
+
+/* 90ms slam, 120ms hold, 150ms out: the out is one hard cut, no fade. */
+@keyframes arcade-cue {
+  0%,
+  58.33% {
+    opacity: 1;
+  }
+  58.34%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .arcade__ready,
@@ -5968,11 +5957,7 @@ button.artistcard__hint:focus-visible {
   font-size: clamp(20px, 6vw, 26px);
   font-weight: 800;
   letter-spacing: 1px;
-}
-.arcade__readycopy {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.15;
 }
 .arcade__start,
 .arcade__again {
@@ -6075,53 +6060,41 @@ button.artistcard__hint:focus-visible {
   white-space: nowrap;
 }
 
-/* The pad caps at 520px on a wide screen; the field follows it. */
+/* On a wide screen the four columns would be ~300px of travel for one thumb. */
 @media (min-width: 768px) {
   .arcade__lane,
-  .arcade__stamps,
+  .arcade__cue,
   .arcade__static {
     max-width: 520px;
     margin-inline: auto;
   }
 }
 
-/* The pad's destination hint: two hard states, no animation. */
-.arcade .notepad__key.is-hint {
-  box-shadow: inset 0 0 0 2px var(--ink);
-}
-.arcade .notepad__key.is-hint-bar {
-  box-shadow: inset 0 3px 0 0 var(--ink);
-}
-.arcade .notepad__key.is-flash {
-  background: var(--signal);
-}
-
-.arcade__land {
-  display: none;
-}
+/* Landscape is a real layout: shorter chrome, the field keeps the rest. */
 @media (orientation: landscape) and (max-height: 500px) {
   .arcade {
-    padding-bottom: 0;
+    --arcade-bar: 44px;
+    --arcade-hud: 32px;
+    --cue-size: 72px;
   }
-  .arcade > * {
-    display: none;
+  .arcade__cue {
+    height: 44%;
   }
-  .arcade__land {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100dvh;
-    margin: 0;
-    padding: 20px;
-    text-align: center;
-    font-size: 14px;
-    font-weight: 800;
-    letter-spacing: 2px;
+  .arcade__ready {
+    gap: 6px;
+    padding: 10px 16px;
+  }
+  .arcade__summary {
+    gap: 4px;
+    padding: 8px 16px 12px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .arcade__note {
+    animation: none;
+  }
+  .arcade__cue {
     animation: none;
   }
 }
