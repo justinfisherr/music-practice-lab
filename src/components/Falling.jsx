@@ -376,13 +376,6 @@ export default function Falling({ onExit }) {
         run.score -= 250
         run.streak = 0
         run.bombsHit += 1
-        run.stamps.push({
-          id: stampId.current++,
-          text: 'BOMB',
-          tone: 'bomb',
-          column: event.column,
-          until: now + 300,
-        })
         flashKey(pc)
       } else {
         const multiplier = multiplierFor(run.streak)

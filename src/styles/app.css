@@ -5851,11 +5851,6 @@ button.artistcard__hint:focus-visible {
   color: var(--bg);
   font-size: 16px;
 }
-.arcade__stamp--bomb {
-  background: var(--ink);
-  border-color: var(--signal);
-  color: var(--bg);
-}
 .arcade__stamp--ok {
   border: 0;
   padding: 0;
