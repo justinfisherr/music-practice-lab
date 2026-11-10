@@ -33,6 +33,10 @@
   --desk-rail: 340px;
   --teach-size: 12px;
   --teach-line: 1.5;
+  --pad-key-h: 56px;
+  --pad-gap: 6px;
+  --pad-h: calc(var(--pad-key-h) * 3 + 55px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
   color-scheme: var(--scheme);
 }
@@ -5280,4 +5284,351 @@ button.artistcard__hint:focus-visible {
   margin-top: 28px;
   padding-top: 14px;
   border-top: 2px solid var(--line);
+}
+
+/* ---- Touch pad: one octave, the keyboard's stand-in ---- */
+.run__padspacer {
+  height: calc(var(--pad-h) + var(--safe-b));
+  flex: 0 0 auto;
+}
+.notepad {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  border-top: 3px solid var(--line);
+  background: var(--bg);
+  padding: 0 8px calc(var(--safe-b) + 8px);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.notepad__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  padding: 4px 4px 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.notepad__label {
+  white-space: nowrap;
+}
+.notepad__strip {
+  overflow: hidden;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+}
+.notepad__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--pad-gap);
+}
+.notepad__key {
+  min-height: var(--pad-key-h);
+  border: 2px solid var(--line);
+  border-radius: 0;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--t-stamp) var(--ease-snap),
+    color var(--t-stamp) var(--ease-snap);
+}
+.notepad__key.is-held {
+  background: var(--ink);
+  color: var(--bg);
+}
+.notepad__key[aria-disabled='true'] {
+  color: var(--muted);
+  border-style: dashed;
+  pointer-events: none;
+}
+@media (max-height: 700px) {
+  :root {
+    --pad-key-h: 48px;
+  }
+}
+
+/* The bar shows the key on a desk and the stage on a phone. */
+.sessionbar__keyphone {
+  display: none;
+}
+.inputchip {
+  align-self: flex-start;
+  margin: 0;
+  border: 2px solid var(--line);
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.mission__gate-sub {
+  display: block;
+  margin-top: 4px;
+}
+.mission__keyboard {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+.jamskiptext {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ---- Phone: the run window above the fixed pad ---- */
+@media (max-width: 767px) {
+  .modulewhy {
+    display: none;
+  }
+
+  /* Run chrome: LEAVE is the only exit. */
+  .app--run {
+    max-width: none;
+    padding: 0 10px;
+  }
+  .app--run .masthead,
+  .app--run .nav,
+  .app--run .skip {
+    display: none;
+  }
+  .app--run .sessionrun {
+    gap: 10px;
+  }
+  .app--run .sessionbar {
+    min-height: 52px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 2px 8px;
+    box-shadow: none;
+  }
+  .app--run .sessionbar__key {
+    font-size: 11px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+  .app--run .sessionbar__keydesk {
+    display: none;
+  }
+  .app--run .sessionbar__keyphone {
+    display: inline;
+  }
+  .app--run .sessionbar__timer {
+    width: auto;
+    margin-right: auto;
+    font-size: 20px;
+  }
+  .app--run .sessionbar__btns {
+    gap: 6px;
+  }
+  .app--run .sessionbar__btn {
+    min-height: 44px;
+    padding: 4px 8px;
+  }
+  .app--run .sessionbar__confirm {
+    gap: 8px;
+    padding: 8px;
+  }
+  .app--run .sessionbar__confirm .btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+
+  /* The set becomes a strip of cells scrolling in its own box. */
+  .app--run .runrail {
+    display: block;
+    position: static;
+    max-height: none;
+    border: 3px solid var(--line);
+    background: var(--panel);
+    box-shadow: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .app--run .runrail__label {
+    display: none;
+  }
+  .app--run .runrail__list {
+    display: flex;
+    gap: 3px;
+    margin: 0;
+    padding: 3px;
+    list-style: none;
+  }
+  .app--run .runrail__list > li {
+    flex: 0 0 auto;
+  }
+  .app--run .runrail__item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 6px 10px;
+    border: 2px solid var(--line);
+    background: var(--field);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .app--run .runrail__item:disabled {
+    opacity: 1;
+    cursor: default;
+  }
+  .app--run .runrail__item.is-current {
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .app--run .runrail__item.is-passed {
+    border-color: var(--ok-ink);
+  }
+  .app--run .runrail__num {
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .app--run .runrail__body {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+  }
+  .app--run .runrail__type {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  .app--run .runrail__title,
+  .app--run .runrail__teach,
+  .app--run .runrail__status {
+    display: none;
+  }
+
+  /* Reading order of the action: head, ask, verdict, lists, visuals, foot. */
+  .app--run .stagecard,
+  .app--run .hook {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 12px;
+  }
+  .app--run .stagecard > *,
+  .app--run .hook > * {
+    order: 6;
+  }
+  .app--run .stagehead,
+  .app--run .hook__top {
+    order: 1;
+  }
+  .app--run .chordprompt,
+  .app--run .rapidprompt,
+  .app--run .jambar,
+  .app--run .rootanchor,
+  .app--run .jamintrorule,
+  .app--run .hook__copy,
+  .app--run .countin {
+    order: 2;
+  }
+  .app--run .verdictline,
+  .app--run .hook__pass,
+  .app--run .hook__fail,
+  .app--run .jamflash,
+  .app--run .notestamp {
+    order: 3;
+  }
+  .app--run .moduleprogress,
+  .app--run .spine,
+  .app--run .triadlist,
+  .app--run .notecells,
+  .app--run .setreport,
+  .app--run .changesledger,
+  .app--run .hookmarks,
+  .app--run .groovebar {
+    order: 4;
+  }
+  .app--run .scaleviz,
+  .app--run .pianoexample,
+  .app--run .hookgrid,
+  .app--run .jamchanges,
+  .app--run .rapid {
+    order: 5;
+  }
+  .app--run .stagefoot {
+    order: 9;
+  }
+
+  /* Desk: TONIGHT, the mission, the wheel, the rail. */
+  .desk__wheel {
+    display: contents;
+  }
+  .tonight {
+    order: 1;
+  }
+  .desk__main {
+    order: 2;
+  }
+  .wheel {
+    order: 3;
+  }
+  .desk__rail {
+    order: 4;
+  }
+  .mission__top {
+    order: 1;
+  }
+  .whymodules {
+    order: 2;
+  }
+  .mission__actions {
+    order: 3;
+  }
+  .mission__gate {
+    order: 4;
+  }
+  .inputchip,
+  .mission__midi {
+    order: 5;
+  }
+  .stagepreview {
+    order: 6;
+  }
+  .manualstart {
+    order: 7;
+  }
+  .wheel__stage {
+    max-width: 260px;
+  }
+  .wheel__foot {
+    display: none;
+  }
+
+  /* Mobile reflow fixes carried by the same width. */
+  .runrow > * {
+    min-width: 0;
+  }
+  .runrow__date {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 520px) {
+  .ledger__title {
+    font-size: clamp(24px, 7vw, 28px);
+  }
 }

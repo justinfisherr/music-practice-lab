@@ -184,7 +184,7 @@ export default function App() {
 
   return (
     <MidiProvider>
-      <div className="app">
+      <div className={'app' + (route.view === 'session' && route.sub === 'run' ? ' app--run' : '')}>
         <a
           className="skip"
           href="#main-content"

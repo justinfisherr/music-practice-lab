@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMidiContext } from '../hooks/MidiContext.jsx'
+import { useTouchInput } from '../hooks/useTouchInput.js'
 import { keyDisplay } from '../data/scales.js'
 import Wheel from './Wheel.jsx'
 import { loadBonus } from '../session/wheel.js'
@@ -34,6 +35,7 @@ export default function SessionTab({
   onTotalXp,
 }) {
   const midi = useMidiContext()
+  const { touch } = useTouchInput()
   const date = laDate()
   const tonight = tonightKey(date)
   const [variant, setVariant] = useState('tonight')
@@ -112,7 +114,7 @@ export default function SessionTab({
   }
 
   let action
-  if (manualActive || !midi.supported) {
+  if (manualActive) {
     action = null
   } else if (sessionActive) {
     action = (
@@ -127,7 +129,7 @@ export default function SessionTab({
         RESUME SESSION
       </button>
     )
-  } else if (!midi.connected) {
+  } else if (!midi.connected && !touch) {
     action = (
       <button
         type="button"
@@ -252,12 +254,20 @@ export default function SessionTab({
               ) : null}
             </div>
 
-            {!midi.supported ? (
+            {touch ? (
               <p className="mission__gate">
-                GRADED STAGES NEED A DESKTOP + MIDI KEYBOARD. On a phone the ledger is read-only.{' '}
-                <button type="button" className="linkbtn" onClick={onOpenLedger}>
-                  OPEN THE LEDGER
-                </button>
+                No keyboard needed. The pad plays every graded stage except CHANGES.
+                <span className="mission__gate-sub">A keyboard is faster if you have one.</span>
+                {midi.supported ? (
+                  <button
+                    type="button"
+                    className="linkbtn mission__keyboard"
+                    onClick={midi.connect}
+                    disabled={midi.status === 'requesting'}
+                  >
+                    {midi.status === 'requesting' ? 'REQUESTING MIDI…' : 'USE A KEYBOARD INSTEAD'}
+                  </button>
+                ) : null}
               </p>
             ) : !midi.connected ? (
               <p className="mission__gate">
@@ -265,7 +275,9 @@ export default function SessionTab({
               </p>
             ) : null}
 
-            {midi.supported && midi.status === 'ready' ? (
+            {touch ? (
+              <p className="inputchip">INPUT · TOUCH</p>
+            ) : midi.supported && midi.status === 'ready' ? (
               <div className="mission__midi">
                 <label className="mission__midi-label" htmlFor="session-midi-input">
                   INPUT

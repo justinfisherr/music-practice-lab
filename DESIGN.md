@@ -65,7 +65,7 @@ The first block on the Practice tab is a single dark-outlined paper card: `DAILY
 
 ## Session & Ledger
 
-The SESSION tab opens on an ink block: the LA-local date, the key of the night from the circle of fifths, its key number, and the deterministic seed. Graded stages are desktop-only; an unsupported browser gets a ledger link instead of a dead START button. The run has a sticky ink bar with the key, a tabular timer, SOUND, and an inline LEAVE confirm. Warm-up is a scale strip, a seven-step progress spine, and three-note chord prompts. Ear check shows four note cells and grades order. The HOOK is the one inverted surface: a two-bar grid, six notes, and solid/slashed/dashed diff marks on paper cells.
+The SESSION tab opens on an ink block: the LA-local date, the key of the night from the circle of fifths, its key number, and the deterministic seed. Graded stages run on a MIDI keyboard where there is one and on the touch pad everywhere else; a browser without Web MIDI gets the pad instead of a dead START button. The run has a sticky ink bar with the key, a tabular timer, SOUND, and an inline LEAVE confirm. Warm-up is a scale strip, a seven-step progress spine, and three-note chord prompts. Ear check shows four note cells and grades order. The HOOK is the one inverted surface: a two-bar grid, six notes, and solid/slashed/dashed diff marks on paper cells.
 
 The LEDGER is a paper surface with four block meters, a 12-cell key heat grid in circle-of-fifths order, key filter chips drawn only from keys that have runs, and clickable rows. Detail is the same ledger vocabulary plus a back control, a stage table, and the hook notes. No nested cards: rows and cells are ruled, not boxed inside boxes.
 
@@ -116,6 +116,22 @@ The run is a 340px module rail plus the active module panel from 1024px. The rai
 The wheel face and inactive sectors use `--panel` with `--line` rules; the active sector is `--ink` fill with `--bg` text. The pointer is the only signal-red element on the wheel. Hub text follows the same ink/paper rule. `--wheel-spin: 2200ms` and `--wheel-ease: cubic-bezier(.12,.62,.06,1)` are the one authored motion: spin to the sector, then a 90ms pointer settle. Reduced motion skips the spin and places the sector directly. Teach copy uses `--teach-size: 12px` / `--teach-line: 1.5`; the run rail width is `--desk-rail: 340px`.
 
 Small red and green text stays on `--signal-ink` / `--ok-ink`. No new palettes, no nested cards, no emojis.
+
+## Touch input
+
+`NotePad` is the only new input surface and it is not a piano. It is a 4 x 3 grid of the twelve pitch classes in chromatic row-major order — `C C# D Eb / E F Gb G / Ab A Bb B`, labelled with `noteName()` verbatim, so the pad speaks the same vocabulary as the prompts and the ledger. No white/black distinction, no octave scroll, no velocity, no rounded corners.
+
+A tap calls `midi.press(60 + pc)`, which runs the MIDI note-on path into the same subscriber set, so every drill grades it with no new code path. Grading is pitch-class collection on silence, so one thumb is a complete input.
+
+The pad is fixed to the bottom edge while a graded run is active: full-bleed, a 3px `--line` rule on top, `--bg` ground, keys as `--field` cells with 2px `--line` rules, no shadow. A 24px header row carries `TOUCH PAD` on the left and the entry strip on the right. It is never a dismissible sheet and never a chooser.
+
+Key states: default `--field` / `--ink`; held `--ink` fill with `--bg` text for as long as the pointer is down; disabled (paused, or the app is backgrounded) `--field` with `--muted` text and dashed rules. `--t-stamp` 90ms colour flip, no transform, so reduced motion changes nothing. Every key is at least 44px in both axes; at 375px the grid lands at 83 x 56.
+
+Input is auto-selected: pad when `!midi.connected` and the device is coarse-pointer or has no Web MIDI at all; keyboard whenever one connects, which unmounts the pad mid-run and resumes the same stages.
+
+Tokens: `--pad-key-h: 56px` (48px under a 700px viewport height), `--pad-gap: 6px`, `--pad-h` computed from them, `--safe-b: env(safe-area-inset-bottom, 0px)`. No new colours: every state resolves from existing skin tokens, so PAPER through REEL stay legible.
+
+Mobile run layout, under 768px: `TOUCH PAD` only in a run, single column, page scrolls above it. The masthead and nav doors are hidden for the duration of a run and LEAVE is the one exit; that returns about 270px of vertical budget. The session bar collapses to one 52px row (key, tabular timer, PAUSE, SOUND, LEAVE) and the run rail becomes a horizontal strip of 44px stage cells, ink-filled when current, green-ruled when passed. The stage card is a flex column below 768px and its reading order is forced to the order of the action: head, ask, verdict, lists, controls. At a 300px stage window the head, the chord prompt and the verdict still fit.
 
 ## Crate
 

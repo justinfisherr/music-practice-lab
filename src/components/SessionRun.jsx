@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMidiContext } from '../hooks/MidiContext.jsx'
 import { useNoteSequence } from '../hooks/useNoteSequence.js'
+import { useTouchInput } from '../hooks/useTouchInput.js'
 import { gradeSequence } from '../session/grade.js'
 import { EAR_GAP } from '../session/phrases.js'
 import { isMuted, playPhrase, setMuted, SILENT_HINT, unlockAudio } from '../session/audio.js'
@@ -8,6 +9,7 @@ import { noteName, pitchClassesEqual } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
 import ModuleStage from './ModuleStage.jsx'
 import SetRun from './SetRun.jsx'
+import NotePad from './NotePad.jsx'
 
 function clock(ms) {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -25,6 +27,7 @@ function noteText(pcs) {
 
 export default function SessionRun({ practice, onFinished, onExit }) {
   const midi = useMidiContext()
+  const { touch } = useTouchInput()
   const {
     session,
     recordAttempt,
@@ -44,9 +47,10 @@ export default function SessionRun({ practice, onFinished, onExit }) {
   const [review, setReview] = useState(null)
 
   const active = session?.status === 'active'
-  const lost = active && midi.supported && !midi.connected
+  const lost = active && midi.supported && !midi.connected && !touch
   const paused = Boolean(session?.pausedAt)
-  const pausedForInput = !midi.connected || hidden || paused
+  // The pad is the input on a phone; only a keyboard-less desktop is blocked.
+  const pausedForInput = (!touch && !midi.connected) || hidden || paused
 
   useEffect(() => {
     if (!active) return
@@ -61,10 +65,11 @@ export default function SessionRun({ practice, onFinished, onExit }) {
   }, [])
 
   useEffect(() => {
-    if (!active || !midi.supported) return
+    // The pad never pauses the run for a missing keyboard.
+    if (!active || !midi.supported || touch) return
     if (midi.connected) resume('auto')
     else pause('auto')
-  }, [active, midi.supported, midi.connected, pause, resume])
+  }, [active, midi.supported, midi.connected, touch, pause, resume])
 
   // Moving to the next module closes any read-only review.
   useEffect(() => {
@@ -90,6 +95,11 @@ export default function SessionRun({ practice, onFinished, onExit }) {
     Date.parse(session.startedAt) -
     (session.pausedMs || 0)
   const stageId = session.stages[session.currentStage]?.id
+  const stageLabel = stageId
+    ? stageId === 'jam'
+      ? 'CHANGES'
+      : stageId.replaceAll('_', ' ').toUpperCase()
+    : ''
 
   function toggleSound() {
     const next = !sound
@@ -108,7 +118,12 @@ export default function SessionRun({ practice, onFinished, onExit }) {
   return (
     <section className="sessionrun" aria-label="Today's session">
       <div className="sessionbar">
-        <span className="sessionbar__key">{keyDisplay(session.keyId)} MAJOR</span>
+        <span className="sessionbar__key">
+          <span className="sessionbar__keydesk">{keyDisplay(session.keyId)} MAJOR</span>
+          <span className="sessionbar__keyphone">
+            {stageLabel} · {session.currentStage + 1} OF {session.stages.length}
+          </span>
+        </span>
         <span className="sessionbar__timer" aria-label={`Elapsed ${clock(elapsed)}`}>
           {clock(elapsed)}
         </span>
@@ -150,11 +165,7 @@ export default function SessionRun({ practice, onFinished, onExit }) {
         </p>
       ) : null}
 
-      {!midi.supported ? (
-        <p className="notestamp">
-          GRADED STAGES NEED A DESKTOP + MIDI KEYBOARD. This run cannot be graded here.
-        </p>
-      ) : lost ? (
+      {lost ? (
         <p className="notestamp notestamp--lost" role="status">
           KEYBOARD LOST — RECONNECT. The clock is paused and nothing is counted.{' '}
           <button
@@ -181,7 +192,12 @@ export default function SessionRun({ practice, onFinished, onExit }) {
       {!session.composition ? (
         <div className="emptyblock">SESSION DATA MISSING. LEAVE AND START AGAIN.</div>
       ) : session.composition.version === 4 ? (
-        <SetRun practice={practice} onFinished={onFinished} disabled={pausedForInput} />
+        <SetRun
+          practice={practice}
+          onFinished={onFinished}
+          disabled={pausedForInput}
+          touch={touch}
+        />
       ) : session.composition.version === 3 ? (
         <div className="run">
           <RunRail
@@ -238,6 +254,13 @@ export default function SessionRun({ practice, onFinished, onExit }) {
           disabled={pausedForInput}
         />
       )}
+
+      {touch ? (
+        <>
+          <div className="run__padspacer" aria-hidden="true" />
+          <NotePad keyId={session.keyId} disabled={pausedForInput} />
+        </>
+      ) : null}
     </section>
   )
 }

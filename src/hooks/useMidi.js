@@ -31,19 +31,33 @@ export function useMidi() {
     return () => listenersRef.current.delete(listener)
   }, [])
 
-  const handleMessage = useCallback((event) => {
-    const [statusByte, note, velocity = 0] = event.data
-    const command = statusByte & 0xf0
-    const isNoteOn = command === 0x90 && velocity > 0
-    const isNoteOff = command === 0x80 || (command === 0x90 && velocity === 0)
-
-    if (isNoteOn) {
-      setActiveNotes((prev) => (prev.includes(note) ? prev : [...prev, note]))
-      listenersRef.current.forEach((fn) => fn(note, velocity))
-    } else if (isNoteOff) {
-      setActiveNotes((prev) => prev.filter((n) => n !== note))
-    }
+  // The one note path. Hardware and the touch pad both land here, so drills
+  // cannot tell which input fired.
+  const emitNoteOn = useCallback((note, velocity = 100) => {
+    setActiveNotes((prev) => (prev.includes(note) ? prev : [...prev, note]))
+    listenersRef.current.forEach((fn) => fn(note, velocity))
   }, [])
+
+  const emitNoteOff = useCallback((note) => {
+    setActiveNotes((prev) => prev.filter((n) => n !== note))
+  }, [])
+
+  const handleMessage = useCallback(
+    (event) => {
+      const [statusByte, note, velocity = 0] = event.data
+      const command = statusByte & 0xf0
+      const isNoteOn = command === 0x90 && velocity > 0
+      const isNoteOff = command === 0x80 || (command === 0x90 && velocity === 0)
+
+      if (isNoteOn) emitNoteOn(note, velocity)
+      else if (isNoteOff) emitNoteOff(note)
+    },
+    [emitNoteOn, emitNoteOff],
+  )
+
+  // Injected note events, for the touch pad.
+  const press = useCallback((note, velocity = 100) => emitNoteOn(note, velocity), [emitNoteOn])
+  const release = useCallback((note) => emitNoteOff(note), [emitNoteOff])
 
   // Attach message handling to a given input id (detaching any previous one).
   const attachToInput = useCallback(
@@ -135,8 +149,22 @@ export function useMidi() {
       selectInput,
       connect,
       subscribe,
+      press,
+      release,
       activeNotes,
     }),
-    [supported, status, connected, inputs, selectedInputId, selectInput, connect, subscribe, activeNotes],
+    [
+      supported,
+      status,
+      connected,
+      inputs,
+      selectedInputId,
+      selectInput,
+      connect,
+      subscribe,
+      press,
+      release,
+      activeNotes,
+    ],
   )
 }

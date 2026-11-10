@@ -4,7 +4,7 @@ import SetWarmup from './SetWarmup.jsx'
 import SetCard from './SetCard.jsx'
 import JamStage from './JamStage.jsx'
 
-export default function SetRun({ practice, onFinished, disabled }) {
+export default function SetRun({ practice, onFinished, disabled, touch }) {
   const { session, recordAttempt, recordDetail, advanceStage, goToStage, finish } = practice
   const completingRef = useRef(false)
   const [reviewReturn, setReviewReturn] = useState(null)
@@ -130,6 +130,7 @@ export default function SetRun({ practice, onFinished, disabled }) {
             stageId="jam"
             recordAttempt={recordAttempt}
             disabled={disabled}
+            touch={touch}
             onDone={finishJam}
           />
         ) : stage ? (

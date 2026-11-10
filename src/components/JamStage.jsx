@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useChangesRound } from '../hooks/useChangesRound.js'
 import { keyDisplay } from '../data/scales.js'
-import { buildJamDegrees, chordLabel, PLAY_CHANGES } from '../session/set.js'
+import { buildJamDegrees, chordLabel, phrasePcs, PLAY_CHANGES } from '../session/set.js'
+import { playPhrase, unlockAudio } from '../session/audio.js'
 import FoundationLink from './FoundationLink.jsx'
 import PointsPops, { usePointPops } from './PointsPops.jsx'
 
-export default function JamStage({ session, stageId, onDone, disabled, recordAttempt }) {
+export default function JamStage({ session, stageId, onDone, disabled, recordAttempt, touch }) {
   const keyId = session.keyId
   const detail = session.composition.stages.find((entry) => entry.id === 'jam')?.detail || {}
   const initialChangesId = PLAY_CHANGES.some((entry) => entry.id === detail.changesId)
@@ -88,6 +89,13 @@ export default function JamStage({ session, stageId, onDone, disabled, recordAtt
   const totalBars = preview.length
   const report = changes.round || changes.live
 
+  // The changes round scores octaves, so the pad cannot play it. Root motion is
+  // enough to hear it.
+  function hearChanges() {
+    unlockAudio()
+    playPhrase(phrasePcs(keyId, preview), { gap: 0.6 })
+  }
+
   return (
     <div className="stagecard jamstage">
       <div className="stagehead">
@@ -105,64 +113,94 @@ export default function JamStage({ session, stageId, onDone, disabled, recordAtt
       </div>
 
       {changes.phase === 'idle' ? (
-        <>
-          <div className="jamintrorule">
-            <span className="jamintrorule__label">30-SECOND ROUND · {bpm} BPM</span>
-            <label className="jamfield">
-              <span className="jamfield__label">PROGRESSION</span>
-              <select
-                className="jamfield__select"
-                value={changesId}
-                onChange={(event) => setChangesId(event.target.value)}
+        touch ? (
+          <>
+            <p className="notestamp">
+              THE CHANGES ROUND SCORES OCTAVES. IT NEEDS THE KEYBOARD.
+            </p>
+            <p className="jamskiptext">
+              This round is skipped on the pad. The warm-up and the cards still count.
+            </p>
+            <div className="stagefoot">
+              <button
+                type="button"
+                className="btn btn--signal"
+                onClick={skipStage}
                 disabled={disabled}
               >
-                {PLAY_CHANGES.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="jamfield">
-              <span className="jamfield__label">BARS PER CHORD</span>
-              <div className="jamchips">
-                {[1, 2, 4].map((count) => (
-                  <button
-                    key={count}
-                    type="button"
-                    className={`jamchip${barsPerChord === count ? ' is-on' : ''}`}
-                    onClick={() => setBarsPerChord(count)}
-                    aria-pressed={barsPerChord === count}
-                    disabled={disabled}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
+                SKIP CHANGES
+              </button>
+              <button type="button" className="btn" onClick={hearChanges} disabled={disabled}>
+                HEAR THE CHANGES
+              </button>
             </div>
-            <p className="jamintrorule__copy">
-              {preview.map((degree) => chordLabel(keyId, degree)).join(' · ')} · {preview.length} BARS
-            </p>
-            <p className="jamintrorule__copy">
-              Correct chord at the change is the base. Timing near the change and small voice
-              movements add. Missed changes reset the combo.
-            </p>
-          </div>
-          <div className="stagefoot">
-            <button
-              type="button"
-              className="btn btn--signal"
-              onClick={changes.start}
-              disabled={disabled}
-            >
-              START 30-SECOND ROUND
-            </button>
-            <button type="button" className="btn btn--ghost" onClick={skipStage} disabled={disabled}>
-              SKIP CHANGES
-            </button>
-          </div>
-          <FoundationLink id="play-the-changes" />
-        </>
+          </>
+        ) : (
+          <>
+            <div className="jamintrorule">
+              <span className="jamintrorule__label">30-SECOND ROUND · {bpm} BPM</span>
+              <label className="jamfield">
+                <span className="jamfield__label">PROGRESSION</span>
+                <select
+                  className="jamfield__select"
+                  value={changesId}
+                  onChange={(event) => setChangesId(event.target.value)}
+                  disabled={disabled}
+                >
+                  {PLAY_CHANGES.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="jamfield">
+                <span className="jamfield__label">BARS PER CHORD</span>
+                <div className="jamchips">
+                  {[1, 2, 4].map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      className={`jamchip${barsPerChord === count ? ' is-on' : ''}`}
+                      onClick={() => setBarsPerChord(count)}
+                      aria-pressed={barsPerChord === count}
+                      disabled={disabled}
+                    >
+                      {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="jamintrorule__copy">
+                {preview.map((degree) => chordLabel(keyId, degree)).join(' · ')} · {preview.length}{' '}
+                BARS
+              </p>
+              <p className="jamintrorule__copy">
+                Correct chord at the change is the base. Timing near the change and small voice
+                movements add. Missed changes reset the combo.
+              </p>
+            </div>
+            <div className="stagefoot">
+              <button
+                type="button"
+                className="btn btn--signal"
+                onClick={changes.start}
+                disabled={disabled}
+              >
+                START 30-SECOND ROUND
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={skipStage}
+                disabled={disabled}
+              >
+                SKIP CHANGES
+              </button>
+            </div>
+            <FoundationLink id="play-the-changes" />
+          </>
+        )
       ) : null}
 
       {changes.phase === 'countin' ? (
