@@ -1,5 +1,5 @@
 import { keyDisplay } from '../data/scales.js'
-import { PLAY_CHANGES } from '../session/set.js'
+import { metersFilled, PLAY_CHANGES } from '../session/set.js'
 import { xpBreakdown } from '../../lib/xp.js'
 import { LevelUpBlock } from './Rank.jsx'
 
@@ -32,10 +32,13 @@ function focusLine(stages) {
   const changes = stages.find((stage) => stage.id === 'jam')?.detail
   const lab = warm?.lab
   if (lab && !lab.passed) {
-    return 'SCALE LAB: play the major, relative minor, and parallel minor before the ear.'
+    return 'SCALE LAB: play the major, relative minor, and blues before the ear.'
   }
   if (warm?.rapid && warm.rapid.passed !== true) {
-    return 'CHORDS: play I through vi in order before the turnaround.'
+    return 'CHORDS: play I through vi in order before the progressions.'
+  }
+  if (warm?.progression && warm.progression.passed !== true) {
+    return 'PROGRESSIONS: a clean chord fills that bar — fill every bar.'
   }
   if (warm?.turnaround && warm.turnaround.passed !== true) {
     return 'TURNAROUND: comp I–vi–ii–V clean.'
@@ -69,15 +72,24 @@ export default function SetSummary({ session, syncState, onDone, onAgain, onOpen
 
   const stages = session.stages || []
   const warm = stages.find((stage) => stage.id === 'warmup')?.detail
+  // Older runs carried a changes round; they still read, but nothing new
+  // writes one.
   const changes = stages.find((stage) => stage.id === 'jam')?.detail
   const changesName = PLAY_CHANGES.find((entry) => entry.id === changes?.changesId)?.name
   const xp = xpBreakdown(stages, session.status, session.scope || 'session')
   const sync = syncLine(syncState)
   const rapid = warm?.rapid
+  const progression = warm?.progression
   const turnaround = warm?.turnaround
   const lab = warm?.lab
   const homes = Array.isArray(lab?.homesPlayed) ? lab.homesPlayed.length : warm?.scale?.passed ? 1 : 0
   const focus = focusLine(stages)
+  // The progressions phase reports per-bar meters; the old turnaround only had
+  // a clean count.
+  const barsTotal = progression?.total ?? turnaround?.total ?? 4
+  const barsFull = progression
+    ? metersFilled(progression.meters)
+    : (turnaround?.clean ?? 0)
 
   return (
     <section className="summary" aria-labelledby="summary-title">
@@ -89,7 +101,7 @@ export default function SetSummary({ session, syncState, onDone, onAgain, onOpen
           {keyDisplay(session.keyId)} MAJOR
         </h2>
         <p className="summary__meta">
-          {clock(session.durationMs)} · 30-SECOND CHANGES ·{' '}
+          {clock(session.durationMs)} · SCALE LAB · EAR · CHORDS · PROGRESSIONS ·{' '}
           {session.composition?.source === 'llm' ? 'LLM WARM-UP' : 'STANDARD SET'}
         </p>
       </div>
@@ -109,39 +121,64 @@ export default function SetSummary({ session, syncState, onDone, onAgain, onOpen
         </div>
 
         <div className="setreport__block">
-          <span className="setreport__label">CHORDS · TURNAROUND</span>
+          <span className="setreport__label">CHORDS</span>
           <div className="setreport__nums">
             <span>
-              <strong>{rapid?.clean ?? rapid?.correct ?? 0} / {rapid?.total ?? 6}</strong> CHORDS
+              <strong>
+                {rapid?.clean ?? rapid?.correct ?? 0} / {rapid?.total ?? 6}
+              </strong>{' '}
+              CHORDS
             </span>
             <span>
-              <strong>{turnaround?.clean ?? 0} / {turnaround?.total ?? 4}</strong> TURNAROUND
-            </span>
-            <span>
-              <strong>{turnaround?.passed ? 'CLEAR' : 'OPEN'}</strong> SET
+              <strong>{progression?.passed || turnaround?.passed ? 'CLEAR' : 'OPEN'}</strong> SET
             </span>
           </div>
         </div>
 
         <div className="setreport__block">
           <span className="setreport__label">
-            CHANGES{changesName ? ` · ${changesName.toUpperCase()}` : ''}
+            PROGRESSIONS{progression?.name ? ` · ${progression.name.toUpperCase()}` : ''}
           </span>
           <div className="setreport__nums">
             <span>
-              <strong>{changes?.score ?? 0}</strong> SCORE
+              <strong>
+                {barsFull} / {barsTotal}
+              </strong>{' '}
+              BARS FULL
             </span>
             <span>
-              <strong>{changes?.best ?? 0}</strong> BEST
+              <strong>{progression?.score ?? 0}</strong> SCORE
             </span>
             <span>
-              <strong>{changes?.voiceLead ?? 0}</strong> VOICE LEAD
+              <strong>×{progression?.bestCombo ?? 0}</strong> BEST COMBO
             </span>
             <span>
-              <strong>{changes?.accuracy ?? 0}%</strong> ACCURACY
+              <strong>{progression?.voicings ?? 0}</strong> BASS MOVED
             </span>
           </div>
         </div>
+
+        {changes ? (
+          <div className="setreport__block">
+            <span className="setreport__label">
+              CHANGES{changesName ? ` · ${changesName.toUpperCase()}` : ''}
+            </span>
+            <div className="setreport__nums">
+              <span>
+                <strong>{changes.score ?? 0}</strong> SCORE
+              </span>
+              <span>
+                <strong>{changes.best ?? 0}</strong> BEST
+              </span>
+              <span>
+                <strong>{changes.voiceLead ?? 0}</strong> VOICE LEAD
+              </span>
+              <span>
+                <strong>{changes.accuracy ?? 0}%</strong> ACCURACY
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         {changes ? (
           <div className="setreport__block">
@@ -151,7 +188,10 @@ export default function SetSummary({ session, syncState, onDone, onAgain, onOpen
                 <strong>{changes.notes ?? 0}</strong> NOTES
               </span>
               <span>
-                <strong>{changes.hits ?? 0} / {changes.changes ?? 0}</strong> CHANGES HIT
+                <strong>
+                  {changes.hits ?? 0} / {changes.changes ?? 0}
+                </strong>{' '}
+                CHANGES HIT
               </span>
               <span>
                 <strong>×{changes.bestCombo ?? 0}</strong> BEST COMBO

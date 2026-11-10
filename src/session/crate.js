@@ -16,6 +16,9 @@ const artistMap = new Map(artists.map((artist) => [artist.id, artist]))
 export const RECORDS = [...recordMap.values()]
 export const ARTISTS = artists
 export const CRATE_KEY = 'mpl.crate'
+export const CRATE_SEED_KEY = 'mpl.crate.seeded'
+export const CRATE_ENDPOINT =
+  import.meta.env?.VITE_CRATE_ENDPOINT || 'https://music-practice-lab.vercel.app/api/crate'
 
 function cleanLevel(value) {
   const level = Math.round(Number(value))
@@ -50,15 +53,31 @@ function cleanOpened(opened) {
   return rows
 }
 
+// The local copy is a mirror of the server. Remote rows win: cleanOpened keeps
+// the first sighting of each id, so the server's copy is taken and the local
+// mirror only fills the gaps. Unknown ids never survive cleanOpened.
+export function mergeOpened(local, remote) {
+  return cleanOpened([...cleanOpened(remote), ...cleanOpened(local)])
+}
+
 export function loadCrate() {
   const stored = safeRead(CRATE_KEY, null)
-  return { opened: cleanOpened(stored?.opened) }
+  return {
+    opened: cleanOpened(stored?.opened),
+    unopened: typeof stored?.unopened === 'number' ? stored.unopened : null,
+    level: typeof stored?.level === 'number' ? stored.level : null,
+  }
 }
 
 export function saveCrate(state) {
   const opened = cleanOpened(state?.opened)
-  safeWrite(CRATE_KEY, { opened })
-  return { opened }
+  const unopened =
+    typeof state?.unopened === 'number' && Number.isFinite(state.unopened)
+      ? Math.max(0, Math.round(state.unopened))
+      : null
+  const level = typeof state?.level === 'number' ? Math.round(state.level) : null
+  safeWrite(CRATE_KEY, { opened, unopened, level })
+  return { opened, unopened, level }
 }
 
 export function ownedIds(state = loadCrate()) {
@@ -77,45 +96,79 @@ export function ownedArtistIds(state = loadCrate()) {
   )
 }
 
+// The server knows the level and how many boxes are left; the local formula is
+// only a fallback for a device that has never synced.
 export function unopened(level, state = loadCrate()) {
+  const remote = state?.unopened
+  if (typeof remote === 'number' && Number.isFinite(remote)) return Math.max(0, Math.round(remote))
   return Math.max(0, cleanLevel(level) - cleanOpened(state?.opened).length)
 }
 
-function pickedIndex(length, random) {
-  if (typeof random === 'function') {
-    return Math.min(length - 1, Math.max(0, Math.floor(random() * length)))
-  }
+async function request(options = {}) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 12000)
   try {
-    const buffer = new Uint32Array(1)
-    crypto.getRandomValues(buffer)
-    return buffer[0] % length
-  } catch {
-    return Math.floor(Math.random() * length)
+    const res = await fetch(CRATE_ENDPOINT, {
+      ...options,
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const error = new Error(body.error || `HTTP ${res.status}`)
+      error.status = res.status
+      throw error
+    }
+    return body
+  } finally {
+    clearTimeout(timer)
   }
 }
 
-export function openBox(level, { state = loadCrate(), random = null } = {}) {
-  if (unopened(level, state) <= 0) return null
-  const recordPool = RECORDS.filter((record) => !ownedIds(state).has(record.id))
-  const artistPool = ARTISTS.filter((artist) => !ownedArtistIds(state).has(artist.id))
-  if (!recordPool.length && !artistPool.length) return null
+function newClientKey() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return `crate-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
 
-  const kind = recordPool.length && (!artistPool.length || pickedIndex(2, random) === 0)
-    ? 'record'
-    : 'artist'
-  const record = kind === 'record' ? recordPool[pickedIndex(recordPool.length, random)] : null
-  const artist = kind === 'artist' ? artistPool[pickedIndex(artistPool.length, random)] : null
-  const levelValue = cleanLevel(level)
-  saveCrate({
-    opened: [...state.opened, {
-      level: levelValue,
-      kind,
-      recordId: record?.id || null,
-      artistId: artist?.id || null,
-      at: new Date().toISOString(),
-    }],
+// Pull the ledger and fold it into the mirror. Throws when the server is
+// unreachable, so the page can say it is showing the last sync.
+export async function syncCrate() {
+  const body = await request()
+  return saveCrate({
+    opened: mergeOpened(loadCrate().opened, body.opened),
+    unopened: body.unopened,
+    level: body.level,
   })
-  return { kind, record, artist, level: levelValue }
+}
+
+// Opening is never faked: the box is picked server-side inside a transaction.
+export async function openCrateBox(level) {
+  const body = await request({
+    method: 'POST',
+    body: JSON.stringify({ action: 'open', level: cleanLevel(level), clientKey: newClientKey() }),
+  })
+  saveCrate({
+    opened: mergeOpened(loadCrate().opened, body.opened),
+    unopened: body.unopened,
+    level: body.level,
+  })
+  const box = body.box || {}
+  return {
+    kind: box.kind,
+    record: box.recordId ? recordById(box.recordId) : null,
+    artist: box.artistId ? artistById(box.artistId) : null,
+    level: box.level,
+  }
+}
+
+// Collections kept on this device before the server owned the crate are sent
+// once. The flag is written only after a 2xx, so a failed import retries.
+export async function seedCrateOnce() {
+  if (safeRead(CRATE_SEED_KEY, false) === true) return
+  const opened = cleanOpened(loadCrate().opened)
+  if (!opened.length) return
+  await request({ method: 'POST', body: JSON.stringify({ action: 'import', rows: opened }) })
+  safeWrite(CRATE_SEED_KEY, true)
 }
 
 export function rarityFor(rating) {

@@ -2991,6 +2991,26 @@ select {
 .wheel__label.is-active {
   fill: var(--bg);
 }
+/* A held pitch class lights the sector that shares its tonic. */
+.wheel__label.is-played {
+  fill: var(--signal-ink);
+}
+.wheel__label.is-active.is-played {
+  fill: var(--bg);
+}
+.wheel__sector.is-played .wheel__tooth {
+  stroke: var(--signal);
+  stroke-width: 5;
+}
+.wheel__dot {
+  fill: var(--bg);
+  stroke: var(--line);
+  stroke-width: 2;
+}
+.wheel__dot.is-played {
+  fill: var(--signal);
+  stroke: var(--line);
+}
 .wheel__tonight {
   fill: var(--muted);
   font-family: var(--mono);
@@ -6367,5 +6387,160 @@ button.artistcard__hint:focus-visible {
   .piano__white,
   .piano__black {
     transition: none;
+  }
+}
+
+/* ---- v4: one stage, so the run is one column at every width ---- */
+@media (min-width: 1024px) {
+  .run--solo {
+    display: block;
+  }
+}
+.jamchips {
+  flex-wrap: wrap;
+}
+.jamchip {
+  padding: 0 10px;
+}
+
+/* ---- v4 progressions: picker, then one meter per bar ---- */
+.progpick {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.progpick__row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+}
+.progpick__name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.chordmeters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 3px;
+  margin-bottom: 10px;
+}
+.chordmeter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 3px solid var(--line);
+  background: var(--panel);
+  padding: 4px;
+}
+.chordmeter__numeral {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.chordmeter.is-current {
+  background: var(--accent-soft);
+}
+.chordmeter.is-current .chordmeter__numeral,
+.chordmeter.is-full .chordmeter__numeral {
+  color: var(--ink);
+}
+.chordmeter__track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 32px;
+  border: 2px solid var(--line);
+  background: var(--bg);
+}
+.chordmeter__fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--ink);
+  transition: height 160ms ease-out;
+}
+.chordmeter.is-full .chordmeter__fill {
+  background: var(--signal-ink);
+}
+.chordmeter__bass {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.chordmeter__bass.is-moved {
+  color: var(--ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chordmeter__fill {
+    transition: none;
+  }
+}
+
+/* ---- Scale Lab: three homes on one page ---- */
+.homelab {
+  display: grid;
+  gap: 14px;
+}
+.homelab__home {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 3px solid var(--line);
+}
+.homelab__home .pianoexample {
+  margin: 0;
+}
+.homelab__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.homelab__top .pianoexample__label {
+  margin: 0;
+}
+.homelab__stamp {
+  border: 2px solid var(--line);
+  padding: 2px 6px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.homelab__stamp.is-live {
+  background: var(--ink);
+  color: var(--on-fill);
+}
+.homelab__stamp.is-clear {
+  border-color: var(--ok-ink);
+  color: var(--ok-ink);
+}
+.homelab__notes {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.homelab__calls {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 2px solid var(--line);
+}
+@media (min-width: 760px) {
+  .homelab {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

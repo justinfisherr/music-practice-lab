@@ -1,5 +1,8 @@
-// Rank ladder. XP floors for L1..L10; the last level has no next.
-export const LEVELS = [0, 120, 300, 560, 900, 1320, 1840, 2460, 3180, 4000]
+// Rank ladder. The XP floors and levelFor live in lib/rank.js so the server can
+// derive a level from the session ledger; this module keeps the client titles.
+import { LEVELS, levelFor } from '../../lib/rank.js'
+
+export { LEVELS, levelFor }
 
 export const TITLES = [
   'OPENING ACT',
@@ -13,15 +16,6 @@ export const TITLES = [
   'BANDLEADER',
   'BANDLEADER',
 ]
-
-export function levelFor(xp) {
-  const value = Number.isFinite(xp) ? Math.max(0, xp) : 0
-  let level = 1
-  for (let i = 0; i < LEVELS.length; i++) {
-    if (value >= LEVELS[i]) level = i + 1
-  }
-  return level
-}
 
 export function titleFor(level) {
   const index = Math.min(TITLES.length, Math.max(1, level)) - 1

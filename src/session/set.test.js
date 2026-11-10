@@ -5,14 +5,19 @@ import {
   allDegreesFilled,
   BLUES_DEGREES,
   bluesChord,
-  boogiePcs,
   buildJamDegrees,
   bumpConfidence,
+  bumpMeter,
   chordTonePc,
   emptyConfidence,
   fifthPc,
   fiveNoteRangePcs,
+  inversionBonus,
+  INVERSION_BONUS,
+  INVERSION_BONUS_NEW,
   JAM_DEGREES,
+  metersFilled,
+  nextBarIndex,
   phrasePcs,
   pickRapidDegree,
   PLAY_CHANGES,
@@ -20,7 +25,6 @@ import {
   rapidPrompts,
   scoreChord,
   RAPID_COUNT,
-  INVERSION_BONUS,
   CHORD_MISS_POINTS,
   rootFirstPhrase,
   scoreComp,
@@ -68,14 +72,6 @@ test('blues I/IV/V are dominant sevenths, labelled with a plain 7', () => {
   assert.deepEqual(BLUES_DEGREES, [1, 1, 1, 1, 4, 4, 1, 1, 5, 4, 1, 5])
 })
 
-test('the boogie figure is root 3 5 6 b7 6 5 3 in order', () => {
-  assert.deepEqual(boogiePcs('C', 1), [0, 4, 7, 9, 10, 9, 7, 4])
-  assert.deepEqual(boogiePcs('C', 4), [5, 9, 0, 2, 3, 2, 0, 9])
-  assert.equal(boogiePcs('C', 1).length, 8)
-  assert.equal(boogiePcs('C', 1)[3], boogiePcs('C', 1)[5])
-  assert.equal(boogiePcs('C', 1)[1], boogiePcs('C', 1)[7])
-})
-
 test('rapid prompts are forty deterministic degrees with no back-to-back repeat', () => {
   const prompts = rapidPrompts(7, 'C', 40)
   assert.equal(prompts.length, 40)
@@ -94,6 +90,52 @@ test('a clean chord pays the base and a slip costs points', () => {
   const inverted = scoreChord({ clean: true, combo: 0, inversion: true })
   assert.equal(inverted.points, clean.points + INVERSION_BONUS)
   assert.ok(scoreChord({ clean: true, combo: 6 }).points > clean.points)
+})
+
+test('an explicit bonus replaces the inversion flag', () => {
+  const clean = scoreChord({ clean: true, combo: 0 })
+  assert.equal(scoreChord({ clean: true, combo: 0, bonus: 0 }).points, clean.points)
+  assert.equal(
+    scoreChord({ clean: true, combo: 0, inversion: true, bonus: INVERSION_BONUS_NEW }).points,
+    clean.points + INVERSION_BONUS_NEW,
+  )
+  assert.equal(scoreChord({ clean: false, bonus: 90 }).points, CHORD_MISS_POINTS)
+})
+
+test('the bar index wraps and a zero-length form stays at bar 0', () => {
+  assert.equal(nextBarIndex(0, 4), 1)
+  assert.equal(nextBarIndex(3, 4), 0)
+  assert.equal(nextBarIndex(11, 12), 0)
+  assert.equal(nextBarIndex(2, 0), 0)
+  assert.equal(nextBarIndex(0, 0), 0)
+})
+
+test('a meter moves one bar by a quarter and clamps at 0 and 1', () => {
+  let meters = [0, 0, 0]
+  meters = bumpMeter(meters, 1, true)
+  assert.deepEqual(meters, [0, 0.25, 0])
+  meters = bumpMeter(meters, 1, true)
+  meters = bumpMeter(meters, 1, true)
+  meters = bumpMeter(meters, 1, true)
+  assert.deepEqual(meters, [0, 1, 0])
+  meters = bumpMeter(meters, 1, true)
+  assert.equal(meters[1], 1)
+  meters = bumpMeter(meters, 0, false)
+  assert.equal(meters[0], 0)
+  // A short array grows to reach the bar it is bumping.
+  assert.deepEqual(bumpMeter([], 2, true), [0, 0, 0.25])
+  assert.equal(metersFilled([1, 0.75, 1]), 2)
+  assert.equal(metersFilled([]), 0)
+})
+
+test('the inversion bonus pays 50 for a moved bass and 90 for a new one', () => {
+  assert.equal(inversionBonus({ rootPc: 0, bassPc: 0 }), 0)
+  assert.equal(inversionBonus({ rootPc: 0, bassPc: 4 }), INVERSION_BONUS)
+  assert.equal(inversionBonus({ rootPc: 0, bassPc: 4, lastBassPc: null }), INVERSION_BONUS)
+  assert.equal(inversionBonus({ rootPc: 0, bassPc: 4, lastBassPc: 4 }), INVERSION_BONUS)
+  assert.equal(inversionBonus({ rootPc: 0, bassPc: 7, lastBassPc: 4 }), INVERSION_BONUS_NEW)
+  assert.equal(inversionBonus({ rootPc: 0, bassPc: 4, lastBassPc: 0 }), INVERSION_BONUS_NEW)
+  assert.equal(inversionBonus({}), 0)
 })
 
 test('confidence fills and empties by a quarter, and only full means filled', () => {
@@ -286,22 +328,15 @@ test('phrasePcs maps degrees into the key and keeps the root first', () => {
   assert.deepEqual(phrasePcs('D', [1, 3, 5, 6])[0], 2)
 })
 
-test('composeSet composes exactly a Scale Lab warm-up and a 30-second changes round', () => {
+test('composeSet composes exactly one Scale Lab warm-up stage', () => {
   const set = composeSet({ date: '2026-11-02', keyId: 'C', seed: 7 })
   assert.equal(set.version, 4)
   assert.equal(set.variant, 'set')
   assert.deepEqual(
     set.stages.map((stage) => stage.id),
-    ['warmup', 'jam'],
+    ['warmup'],
   )
-  assert.equal(set.stages.length, 2)
-  const jam = set.stages.find((stage) => stage.id === 'jam')
-  assert.equal(jam.detail.kind, 'jam')
-  assert.equal(jam.detail.title, 'CHANGES')
-  assert.equal(jam.detail.changesId, 'turnaround')
-  assert.equal(jam.detail.barsPerChord, 1)
-  assert.equal(jam.detail.bpm, 84)
-  assert.equal(jam.detail.roundSeconds, 30)
+  assert.equal(set.stages.length, 1)
   assert.deepEqual(set.stages[0].detail.scale.pcs, [...diatonicPcs('C'), 0])
   assert.equal(set.stages[0].detail.rapid.prompts.length, RAPID_COUNT)
   assert.deepEqual(set.stages[0].detail.rapid.prompts, rapidPrompts(7, 'C', RAPID_COUNT))
@@ -317,12 +352,12 @@ test('composeSet ignores supplied cards instead of adding card stages', () => {
   })
   assert.deepEqual(
     set.stages.map((stage) => stage.id),
-    ['warmup', 'jam'],
+    ['warmup'],
   )
   assert.equal(set.cards, undefined)
 })
 
-test('the new set pays 50 XP first try: warm-up 15 + changes 20 + complete 15', () => {
+test('a warm-up plus changes set still pays the legacy 50', () => {
   const stages = [
     { id: 'warmup', tier: 2, attempts: 1, passed: true },
     { id: 'jam', tier: 3, attempts: 1, passed: true },

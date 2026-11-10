@@ -170,6 +170,7 @@ export default function Wheel({
           >
             {MAJOR_KEYS.map((key, index) => {
               const isActive = key.id === active
+              const played = livePcs.has(((key.tonic % 12) + 12) % 12)
               const dist = Math.min(
                 (index - activeIndex + 12) % 12,
                 (activeIndex - index + 12) % 12,
@@ -178,7 +179,9 @@ export default function Wheel({
               return (
                 <g
                   key={key.id}
-                  className={`wheel__sector${isActive ? ' is-active' : ''}${liveClass}`}
+                  className={`wheel__sector${isActive ? ' is-active' : ''}${liveClass}${
+                    played ? ' is-played' : ''
+                  }`}
                   style={{ '--dist': dist }}
                   transform={`rotate(${index * 30} ${CX} ${CY})`}
                 >
@@ -194,7 +197,7 @@ export default function Wheel({
                     <text
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      className={`wheel__label${isActive ? ' is-active' : ''}`}
+                      className={`wheel__label${isActive ? ' is-active' : ''}${played ? ' is-played' : ''}`}
                     >
                       {keyDisplay(key.id)}
                     </text>
@@ -219,6 +222,12 @@ export default function Wheel({
                       {key.scale[5]}m
                     </text>
                   </g>
+                  <circle
+                    cx={CX}
+                    cy={CY - R_IN + 12}
+                    r={5}
+                    className={`wheel__dot${played ? ' is-played' : ''}`}
+                  />
                 </g>
               )
             })}

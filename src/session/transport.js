@@ -1,5 +1,5 @@
 import { getAudioContext, unlockAudio } from './audio.js'
-import { degreeRootPc, seventhByDegree, PROGRESSION_DEGREES } from './set.js'
+import { degreeRootPc, seventhByDegree, TURNAROUND_DEGREES } from './set.js'
 
 // Four-bar generated groove for THE SET: one seventh chord per bar, a click on
 // every beat, and a soft bass root + chord stab. The performance clock is the
@@ -14,13 +14,13 @@ function midiToFreq(note) {
 export function createTransport({
   keyId,
   bpm = 80,
-  degrees = PROGRESSION_DEGREES,
+  degrees = TURNAROUND_DEGREES,
   onBeat,
   onChord,
   onEnd,
 } = {}) {
   const progression =
-    Array.isArray(degrees) && degrees.length ? degrees : PROGRESSION_DEGREES
+    Array.isArray(degrees) && degrees.length ? degrees : TURNAROUND_DEGREES
   const bars = Array.isArray(degrees) && degrees.length ? degrees.length : BARS
   const beatMs = 60000 / bpm
   const barMs = beatMs * BEATS_PER_BAR

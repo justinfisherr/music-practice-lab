@@ -17,7 +17,6 @@ const STEPS = [0, 2, 4, 5, 7, 9, 11]
 const THIRD = { maj7: 4, min7: 3, dom7: 4, halfDim: 3 }
 
 export const TURNAROUND_DEGREES = [1, 6, 2, 5]
-export const PROGRESSION_DEGREES = TURNAROUND_DEGREES
 export const RAPID_DEGREES = [1, 2, 3, 4, 5, 6]
 export const JAM_DEGREES = [1, 6, 2, 5, 2, 5, 1, 6, 1, 6, 2, 5, 2, 5, 1, 6]
 
@@ -74,12 +73,6 @@ export function bluesChord(keyId, degree) {
 }
 
 // One bar of eight boogie eighths: root, 3, 5, 6, b7, 6, 5, 3.
-export function boogiePcs(keyId, degree) {
-  const [root, third, fifth, flatSeven] = bluesChord(keyId, degree).pcs
-  const sixth = (root + 9) % 12
-  return [root, third, fifth, sixth, flatSeven, sixth, fifth, third]
-}
-
 export function thirdPc(keyId, degree) {
   return (degreeRootPc(keyId, degree) + THIRD[QUALITY[degree - 1]]) % 12
 }
@@ -99,23 +92,6 @@ export function fifthPc(keyId) {
 // Scale degrees 3-7: the five-note solo range.
 export function fiveNoteRangePcs(keyId) {
   return [3, 4, 5, 6, 7].map((degree) => degreeRootPc(keyId, degree))
-}
-
-// Warm-up progressions that actually occur in tunes. The warm-up draws one
-// per night; it is not locked to ii-V-I.
-export const PROGRESSIONS = [
-  { id: 'ii-v-i', name: 'II–V–I', degrees: [2, 5, 1] },
-  { id: 'turnaround', name: 'TURNAROUND', degrees: [1, 6, 2, 5] },
-  { id: 'iii-vi-ii-v', name: 'III–VI–II–V', degrees: [3, 6, 2, 5] },
-  { id: 'i-iv-ii-v', name: 'I–IV–II–V', degrees: [1, 4, 2, 5] },
-  { id: 'ii-v-i-vi', name: 'II–V–I–VI', degrees: [2, 5, 1, 6] },
-  { id: 'blues-turn', name: 'BLUES TURN', degrees: [1, 4, 1, 5] },
-  { id: 'i-vi-iv-v', name: 'I–VI–IV–V', degrees: [1, 6, 4, 5] },
-]
-
-export function chooseProgression(seed, keyId) {
-  const rng = mulberry32((seed ^ fnv1a(`prog|${keyId}`)) >>> 0)
-  return PROGRESSIONS[Math.floor(rng() * PROGRESSIONS.length)]
 }
 
 export function phrasePcs(keyId, degrees) {
@@ -154,6 +130,8 @@ export function rapidPrompts(seed = 0, keyId = 'C', count = 40) {
 
 export const RAPID_COUNT = 40
 export const INVERSION_BONUS = 50
+export const INVERSION_BONUS_NEW = 90
+export const METER_STEP = 0.25
 // Rapid-fire chord drill. The bar is the only clock: the first note starts it,
 // every new chord tone restarts it, and it runs out to move on. Hitting all the
 // tones scores the chord but does not advance it.
@@ -217,12 +195,44 @@ export function pickRapidDegree(rng, confidence) {
 }
 
 // A clean chord pays the base times the streak, plus a bonus for a non-root
-// bass. A missed chord knocks a little off and resets the streak.
-export function scoreChord({ clean, combo = 0, inversion = false, penalty = true } = {}) {
+// bass. A missed chord knocks a little off and resets the streak. `bonus` is
+// passed in when the caller has already read the bar's history.
+export function scoreChord({ clean, combo = 0, inversion = false, penalty = true, bonus = null } = {}) {
   const current = Number.isFinite(combo) ? Math.max(0, combo) : 0
   if (!clean) return { points: penalty ? CHORD_MISS_POINTS : 0, combo: 0 }
   const base = Math.round(CHORD_CLEAN_POINTS * Math.min(2, 1 + 0.1 * current))
-  return { points: base + (inversion ? INVERSION_BONUS : 0), combo: current + 1 }
+  const extra = Number.isFinite(bonus) ? bonus : inversion ? INVERSION_BONUS : 0
+  return { points: base + extra, combo: current + 1 }
+}
+
+// The progressions phase loops forever, so the bar index wraps.
+export function nextBarIndex(bar, total) {
+  const count = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0
+  if (!count) return 0
+  const current = Number.isFinite(bar) ? Math.max(0, Math.floor(bar)) : 0
+  return (current + 1) % count
+}
+
+// One bar's meter: a clean chord fills a quarter, a miss empties one. Keyed by
+// bar, not by degree, so a 12-bar form keeps twelve separate meters.
+export function bumpMeter(meters, bar, clean) {
+  const list = Array.isArray(meters) ? [...meters] : []
+  const index = Number.isInteger(bar) && bar >= 0 ? bar : 0
+  while (list.length <= index) list.push(0)
+  const next = (list[index] || 0) + (clean ? METER_STEP : -METER_STEP)
+  list[index] = Math.min(1, Math.max(0, Math.round(next * 100) / 100))
+  return list
+}
+
+export function metersFilled(meters) {
+  return (Array.isArray(meters) ? meters : []).filter((value) => value >= 1).length
+}
+
+// A non-root bass pays 50. Moving the bass off the one that already paid in
+// this bar pays 90 instead — it replaces the 50, it does not stack.
+export function inversionBonus({ rootPc, bassPc, lastBassPc = null } = {}) {
+  if (!Number.isFinite(bassPc) || bassPc === rootPc) return 0
+  return Number.isFinite(lastBassPc) && lastBassPc !== bassPc ? INVERSION_BONUS_NEW : INVERSION_BONUS
 }
 
 // Four bars, one chord per bar. A hit is the first note inside the downbeat

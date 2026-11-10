@@ -14,7 +14,7 @@ if (typeof window !== 'undefined') {
 
 // Bump on every deploy that changes stage layout: a stale saved run would
 // otherwise keep a removed section on screen.
-const BUILD = '2026-11-06-g'
+const BUILD = '2026-11-10-set-one-stage'
 try {
   if (localStorage.getItem('mpl.build') !== BUILD) {
     localStorage.removeItem('mpl.session.current')

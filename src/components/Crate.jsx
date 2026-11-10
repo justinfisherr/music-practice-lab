@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, loadCrate, openBox, rarityFor, unopened } from '../session/crate.js'
+import {
+  collection,
+  loadCrate,
+  openCrateBox,
+  rarityFor,
+  seedCrateOnce,
+  syncCrate,
+  unopened,
+} from '../session/crate.js'
 import { navigate } from '../session/route.js'
 import { XpBand } from './Rank.jsx'
 import ArtistCard from './ArtistCard.jsx'
@@ -24,6 +32,8 @@ function openRecord(record) {
 function CratePage({ rank }) {
   const [state, setState] = useState(() => loadCrate())
   const [reveal, setReveal] = useState(null)
+  const [opening, setOpening] = useState(false)
+  const [offline, setOffline] = useState(false)
   const [query, setQuery] = useState('')
   const [artist, setArtist] = useState('all')
   const [era, setEra] = useState('all')
@@ -31,6 +41,25 @@ function CratePage({ rank }) {
   const [suggestOpen, setSuggestOpen] = useState(false)
   const settled = useDebounced(query)
   const needle = settled.trim().toLowerCase()
+
+  // The server owns the collection: seed any local-only rows once, then read
+  // the ledger back. A failure leaves the last sync on screen.
+  useEffect(() => {
+    let live = true
+    seedCrateOnce()
+      .then(syncCrate)
+      .then((next) => {
+        if (!live) return
+        setState(next)
+        setOffline(false)
+      })
+      .catch(() => {
+        if (live) setOffline(true)
+      })
+    return () => {
+      live = false
+    }
+  }, [])
 
   const rows = useMemo(() => collection(state), [state])
   const left = unopened(rank.level, state)
@@ -83,15 +112,30 @@ function CratePage({ rank }) {
           .slice(0, 6)
       : []
 
-  function handleOpen() {
-    const box = openBox(rank.level)
-    if (!box) return
-    setState(loadCrate())
-    setQuery('')
-    setArtist('all')
-    setEra('all')
-    setRarity('all')
-    setReveal({ ...box, rarity: rarityFor(box.record ? box.record.rating : box.artist?.maxRating) })
+  async function handleOpen() {
+    if (opening || offline) return
+    setOpening(true)
+    try {
+      const box = await openCrateBox(rank.level)
+      if (!box?.record && !box?.artist) return
+      setState(loadCrate())
+      setQuery('')
+      setArtist('all')
+      setEra('all')
+      setRarity('all')
+      setReveal({ ...box, rarity: rarityFor(box.record ? box.record.rating : box.artist?.maxRating) })
+    } catch (error) {
+      // A 4xx is a state mismatch (the ledger moved), not an outage.
+      if (error?.status >= 400 && error.status < 500) {
+        syncCrate()
+          .then(setState)
+          .catch(() => setOffline(true))
+      } else {
+        setOffline(true)
+      }
+    } finally {
+      setOpening(false)
+    }
   }
 
   function pickSuggestion(text) {
@@ -171,13 +215,19 @@ function CratePage({ rank }) {
           <button
             type="button"
             className="btn btn--signal"
-            disabled={left === 0}
+            disabled={left === 0 || opening || offline}
             onClick={handleOpen}
           >
-            OPEN LV {rank.level} BOX
+            {opening ? 'OPENING…' : `OPEN LV ${rank.level} BOX`}
           </button>
         </div>
       )}
+
+      {offline ? (
+        <p className="syncnote syncnote--dead" role="status">
+          CRATE OFFLINE — SHOWING THE LAST SYNC
+        </p>
+      ) : null}
 
       {rows.length === 0 ? (
         <div className="emptyblock crate__empty">No records yet. Level up to earn a box.</div>

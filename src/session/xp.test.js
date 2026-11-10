@@ -46,6 +46,17 @@ test('xp breakdown names each award', () => {
   })
 })
 
+// ---- v4 one-stage set -------------------------------------------------------
+test('a warm-up-only set pays 30: 10 base + 15 complete + 5 first try', () => {
+  assert.equal(deriveXp([stage('warmup', 1, true)], 'done'), 30)
+  assert.equal(deriveXp([stage('warmup', 2, true)], 'done'), 25)
+  assert.equal(deriveXp([stage('warmup', 1, false)], 'done'), 15)
+  assert.equal(deriveXp([stage('warmup', 1, true)], 'abandoned'), 15)
+  const xp = xpBreakdown([stage('warmup', 1, true)], 'done')
+  assert.deepEqual(xp.modules.map((row) => row.xp), [15])
+  assert.equal(xp.complete, 15)
+  assert.equal(xp.total, 30)
+})
 // ---- v3 module vectors ------------------------------------------------------
 const mod = (id, tier, attempts, passed) => ({
   id,

@@ -43,9 +43,8 @@ export function composeLesson({ date, keyId, seed, type }) {
   }
 }
 
-// v4 THE SET: Scale Lab warm-up (three homes, ear, ordered chords, turnaround), then the
-// 30-second changes round. The stage id stays `jam` so old stored runs and the
-// API stage allowlist keep working.
+// v4 THE SET: one stage. The Scale Lab warm-up (three homes, ear, ordered
+// chords, progressions) is the whole set; it finishes the run itself.
 export function composeSet({ date, keyId, seed }) {
   const key = keyById(keyId)
   const warmup = {
@@ -61,21 +60,6 @@ export function composeSet({ date, keyId, seed }) {
     },
   }
 
-  const jam = {
-    id: 'jam',
-    kind: 'jam',
-    title: 'CHANGES',
-    tier: 3,
-    detail: {
-      kind: 'jam',
-      title: 'CHANGES',
-      changesId: 'turnaround',
-      barsPerChord: 1,
-      bpm: 84,
-      roundSeconds: 30,
-    },
-  }
-
   return {
     version: 4,
     variant: 'set',
@@ -83,6 +67,6 @@ export function composeSet({ date, keyId, seed }) {
     keyId,
     seed,
     source: 'local',
-    stages: [warmup, jam],
+    stages: [warmup],
   }
 }

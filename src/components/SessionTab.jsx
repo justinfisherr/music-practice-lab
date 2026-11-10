@@ -10,7 +10,6 @@ import { daysSinceEpoch, laDate, lastSevenRuns, seedFor, tonightKey } from '../s
 import { getRuns } from '../session/api.js'
 import { getPlan } from '../session/plan.js'
 import { RankLine, XpBand } from './Rank.jsx'
-import FoundationLink from './FoundationLink.jsx'
 import { SKINS } from '../session/skin.js'
 import { unlockAudio } from '../session/audio.js'
 import * as store from '../session/store.js'
@@ -248,9 +247,9 @@ export default function SessionTab({
               <div className="whymodules">
                 <span className="whymodules__label">WHY THE SET</span>
                 <p className="whymodules__copy">
-                  Warm up in three homes, then comp a 30-second changes round. The round scores
-                  the chord at each change and pays for close voice leading. The backing keeps
-                  looping after the bell so you can keep practicing.
+                  One warm-up, four rooms. Three homes on the keyboard, four notes by ear, six
+                  seventh chords in order, then a progression that loops while you comp it. The bar
+                  is the clock: a clean chord fills that bar and a bass note off the root pays extra.
                 </p>
               </div>
             )}
@@ -276,28 +275,16 @@ export default function SessionTab({
                   <span className="stagepreview__num">01</span>
                   <span>
                     <span className="stagepreview__type">WARM-UP</span>
-                    <span className="stagepreview__title">SCALE LAB · EAR · CHORDS · TURNAROUND</span>
+                    <span className="stagepreview__title">
+                      SCALE LAB · EAR · CHORDS · PROGRESSIONS
+                    </span>
                     <span className="stagepreview__copy">
-                      Three homes on one keyboard — major, relative minor, blues — then four
-                      notes by ear, six seventh chords in order, and a I–vi–ii–V turnaround. Slow is
-                      fine.
+                      Three homes on one keyboard — major, relative minor, blues — then four notes
+                      by ear, six seventh chords in order, and a progression that loops while the
+                      bar keeps the clock. Finish whenever you like.
                     </span>
                   </span>
                   <span className="stagepreview__tag">T2 · SET</span>
-                </li>
-                <li className="stagepreview__row">
-                  <span className="stagepreview__num">02</span>
-                  <span>
-                    <span className="stagepreview__type">CHANGES</span>
-                    <span className="stagepreview__title">30 SECONDS · PLAY THE CHANGES</span>
-                    <span className="stagepreview__copy">
-                      Comp over the looping changes. The chord at each change scores; close
-                      voicings pay a voice-leading bonus. After 30 seconds the backing keeps
-                      going for practice.
-                    </span>
-                    <FoundationLink id="play-the-changes" />
-                  </span>
-                  <span className="stagepreview__tag">T3 · CHANGES</span>
                 </li>
               </ol>
             )}
@@ -322,7 +309,7 @@ export default function SessionTab({
 
             {!phone && touch ? (
               <p className="mission__gate">
-                No keyboard needed. The pad plays every graded stage except CHANGES.
+                No keyboard needed. The pad plays every graded stage.
                 <span className="mission__gate-sub">A keyboard is faster if you have one.</span>
                 {midi.supported ? (
                   <button
