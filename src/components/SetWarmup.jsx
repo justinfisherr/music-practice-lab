@@ -82,7 +82,6 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const rapidDegreeRef = useRef(1)
   const confidenceRef = useRef(emptyConfidence())
   const answeredRef = useRef(0)
-  const barTimerRef = useRef(null)
   const scoreRef = useRef(0)
   const comboRef = useRef(0)
   const bestComboRef = useRef(0)
@@ -104,7 +103,6 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   useEffect(
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current)
-      if (barTimerRef.current) clearTimeout(barTimerRef.current)
       if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
       if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
     },
@@ -253,19 +251,14 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   }
 
   function stopBar() {
-    if (barTimerRef.current) clearTimeout(barTimerRef.current)
-    barTimerRef.current = null
+    setBarLive(false)
   }
 
-  // Every new chord tone restarts the bar from the top. When it empties the
-  // prompt is scored as it stands and the drill moves on.
+  // Every chord tone restarts the bar from the top. The bar owns the clock: it
+  // is the only thing that can move the drill on when the player stops.
   function restartBar() {
-    stopBar()
     setBarKey((value) => value + 1)
     setBarLive(true)
-    barTimerRef.current = setTimeout(() => {
-      expireRapid()
-    }, CHORD_BAR_MS)
   }
 
   function startChords(next = phase) {
@@ -355,7 +348,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     pop(CHORD_HOLD_POINTS, 'HOLD')
   }
 
-  function missRapid(penalty) {
+  function missRapid(penalty, reason = 'TIME') {
     const degree = rapidDegreeRef.current
     const target = seventhByDegree(keyId, degree)
     const outcome = scoreChord({ clean: false, combo: comboRef.current, penalty })
@@ -368,7 +361,11 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     setScore(scoreRef.current)
     setConfidence(confidenceRef.current)
     if (outcome.points) pop(outcome.points, 'SLIPPED')
-    setChordMsg(`THE ${ROMAN[degree - 1]} IS ${chordFor(degree)} · NEXT`)
+    setChordMsg(
+      `THE ${ROMAN[degree - 1]} IS ${chordFor(degree)} · ${
+        reason === 'STRAY' ? 'WRONG NOTE' : 'BAR RAN OUT'
+      }`,
+    )
     setRevealChord(chordFor(degree))
     playChord(target)
     if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
@@ -388,8 +385,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   }
 
   function expireRapid() {
-    barTimerRef.current = null
-    if (!chordRunRef.current) return
+    if (!chordRunRef.current || disabled) return
     if (solvedRef.current) advanceRapid()
     else missRapid(false)
   }
@@ -419,7 +415,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
       const target = seventhByDegree(keyId, rapidDegreeRef.current)
       const step = rapidChordStep({ target, played: chordNotesRef.current, pc })
       if (step.kind === 'miss') {
-        missRapid(true)
+        missRapid(true, 'STRAY')
         return
       }
       // Any key on the current chord keeps the clock alive, solved or not.
@@ -746,7 +742,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                   </div>
                 ) : null}
               </div>
-              <ChordBar runKey={barKey} live={barLive} />
+              <ChordBar runKey={barKey} live={barLive} onExpire={expireRapid} />
               <div className="confidence" aria-label="Confidence by chord degree">
                 {confidence.map((value, index) => (
                   <div
@@ -886,10 +882,13 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   )
 }
 
-// The bar is the visible clock for a rapid-fire prompt. It drains from full to
-// empty; every state change of runKey restarts it from the top.
-function ChordBar({ runKey, live }) {
+// The bar owns the drill's clock: it drains from full to empty and calls
+// onExpire when it runs out. Every new runKey restarts it from the top, so a
+// chord tone played anywhere in an attempt buys another full bar.
+function ChordBar({ runKey, live, onExpire }) {
   const [percent, setPercent] = useState(100)
+  const expireRef = useRef(onExpire)
+  expireRef.current = onExpire
 
   useEffect(() => {
     if (!live) {
@@ -898,17 +897,18 @@ function ChordBar({ runKey, live }) {
     }
     const start = performance.now()
     const timer = setInterval(() => {
-      const left = 1 - (performance.now() - start) / CHORD_BAR_MS
-      setPercent(Math.max(0, Math.round(left * 100)))
+      const elapsed = performance.now() - start
+      setPercent(Math.max(0, Math.round((1 - elapsed / CHORD_BAR_MS) * 100)))
+      if (elapsed >= CHORD_BAR_MS) {
+        clearInterval(timer)
+        expireRef.current()
+      }
     }, 50)
     return () => clearInterval(timer)
   }, [runKey, live])
 
   return (
-    <div
-      className={`chordbar${live ? ' is-live' : ''}`}
-      aria-hidden="true"
-    >
+    <div className={`chordbar${live ? ' is-live' : ''}`} aria-hidden="true">
       <span className="chordbar__fill" style={{ width: `${percent}%` }} />
     </div>
   )
