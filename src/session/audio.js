@@ -30,16 +30,23 @@ export function isMuted() {
   return !soundOn
 }
 
-// Create/resume the singleton from a real click, before any MIDI-driven replay
-// needs it. Safe to call repeatedly.
-export async function unlockAudio() {
+export function audioState() {
+  return getContext()?.state || 'none'
+}
+
+// Browsers hold the context suspended until a real gesture. Arm it on the first
+// one anywhere in the app so a later MIDI-driven replay is never silent.
+export function armAudio() {
   const audio = getContext()
   if (!audio) return
-  try {
-    if (audio.state === 'suspended') await audio.resume()
-  } catch {
-    // the browser can still refuse; the drills remain playable without tone
-  }
+  if (audio.state !== 'running') audio.resume().catch(() => {})
+}
+
+// Create/resume the singleton from a real click, before any MIDI-driven replay
+// needs it. Safe to call repeatedly. Never awaited by callers: a resume that
+// hangs must not swallow the notes that follow.
+export async function unlockAudio() {
+  armAudio()
 }
 
 export function setMuted(next) {
@@ -85,7 +92,7 @@ export async function playCountIn(bpm = 80, beats = 4) {
   const audio = getContext()
   if (soundOn && audio) {
     try {
-      if (audio.state === 'suspended') await audio.resume()
+      if (audio.state !== 'running') audio.resume().catch(() => {})
       const t0 = audio.currentTime + 0.05
       for (let beat = 0; beat < count; beat++) {
         const osc = audio.createOscillator()
@@ -113,8 +120,8 @@ export async function playPhrase(pcs, { gap = 0.45 } = {}) {
   const audio = getContext()
   if (!audio) return
   try {
-    // Await the unlock: scheduling while still suspended drops the notes.
-    if (audio.state !== 'running') await audio.resume()
+    // Never await this: a resume that hangs would swallow the whole phrase.
+    if (audio.state !== 'running') audio.resume().catch(() => {})
     const t0 = audio.currentTime + 0.04
     pcs.forEach((pc, index) => {
       if (pc == null) return

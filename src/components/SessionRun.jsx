@@ -4,7 +4,7 @@ import { useNoteSequence } from '../hooks/useNoteSequence.js'
 import { useTouchInput } from '../hooks/useTouchInput.js'
 import { gradeSequence } from '../session/grade.js'
 import { EAR_GAP } from '../session/phrases.js'
-import { isMuted, playPhrase, setMuted, SILENT_HINT, unlockAudio } from '../session/audio.js'
+import { audioState, isMuted, playChord, playPhrase, setMuted, SILENT_HINT, unlockAudio } from '../session/audio.js'
 import { noteName, pitchClassesEqual } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
 import ModuleStage from './ModuleStage.jsx'
@@ -40,6 +40,8 @@ export default function SessionRun({ practice, onFinished, onExit }) {
   } = practice
   const [now, setNow] = useState(() => Date.now())
   const [sound, setSound] = useState(() => !isMuted())
+  const [audioNote, setAudioNote] = useState('')
+  const audioNoteTimer = useRef(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [hidden, setHidden] = useState(
     () => typeof document !== 'undefined' && document.visibilityState === 'hidden',
@@ -107,6 +109,21 @@ export default function SessionRun({ practice, onFinished, onExit }) {
     setMuted(!next)
   }
 
+  // A tone you can hear, plus the live audio state — the fastest way to tell a
+  // mute from a browser-blocked context.
+  function testAudio() {
+    unlockAudio()
+    playChord([0, 4, 7], { duration: 1.2 })
+    const state = audioState()
+    setAudioNote(
+      state === 'running'
+        ? 'TONE SENT · AUDIO RUNNING'
+        : `AUDIO ${state.toUpperCase()} · CLICK TONE AGAIN`,
+    )
+    if (audioNoteTimer.current) clearTimeout(audioNoteTimer.current)
+    audioNoteTimer.current = setTimeout(() => setAudioNote(''), 4000)
+  }
+
   function leave() {
     abandon()
     onExit()
@@ -136,7 +153,10 @@ export default function SessionRun({ practice, onFinished, onExit }) {
             {paused ? 'RESUME' : 'PAUSE'}
           </button>
           <button type="button" className="sessionbar__btn" onClick={toggleSound}>
-            SOUND {sound ? 'ON' : 'OFF'}
+            {sound ? 'MUTE' : 'UNMUTE'}
+          </button>
+          <button type="button" className="sessionbar__btn" onClick={testAudio}>
+            TONE
           </button>
           <button
             type="button"
@@ -158,6 +178,12 @@ export default function SessionRun({ practice, onFinished, onExit }) {
           </div>
         ) : null}
       </div>
+
+      {audioNote ? (
+        <p className="notestamp" role="status">
+          {audioNote}
+        </p>
+      ) : null}
 
       {paused ? (
         <p className="notestamp notestamp--lost" role="status">
