@@ -3404,9 +3404,6 @@ select {
   background: var(--signal-ink);
   transition: width 60ms linear;
 }
-.chordbar.is-solved .chordbar__fill {
-  background: var(--ink);
-}
 @media (prefers-reduced-motion: reduce) {
   .chordbar__fill {
     transition: none;

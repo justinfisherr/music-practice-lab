@@ -113,7 +113,8 @@ export async function playPhrase(pcs, { gap = 0.45 } = {}) {
   const audio = getContext()
   if (!audio) return
   try {
-    if (audio.state === 'suspended') await audio.resume()
+    // Await the unlock: scheduling while still suspended drops the notes.
+    if (audio.state !== 'running') await audio.resume()
     const t0 = audio.currentTime + 0.04
     pcs.forEach((pc, index) => {
       if (pc == null) return

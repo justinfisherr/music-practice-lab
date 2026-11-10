@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNoteSequence } from '../hooks/useNoteSequence.js'
 import { gradeSequence } from '../session/grade.js'
-import { playChord, playPhrase, unlockAudio } from '../session/audio.js'
+import { playChord, playPhrase, SILENT_HINT, unlockAudio } from '../session/audio.js'
 import { noteName } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
 import {
@@ -41,6 +41,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const warmup = session.composition.stages[0].detail
   const [phase, setPhase] = useState('lab')
   const [armed, setArmed] = useState(false)
+  const [listening, setListening] = useState(false)
   const [played, setPlayed] = useState([])
   const [result, setResult] = useState(null)
   const [chordRun, setChordRun] = useState(false)
@@ -54,7 +55,6 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const [rapidDegree, setRapidDegree] = useState(1)
   const [barKey, setBarKey] = useState(0)
   const [barLive, setBarLive] = useState(false)
-  const [solved, setSolved] = useState(false)
   const [boogieId, setBoogieId] = useState(1)
   const [boogieRun, setBoogieRun] = useState(false)
   const [boogieMsg, setBoogieMsg] = useState('')
@@ -138,11 +138,16 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
 
   function hearEar() {
     unlockAudio()
+    setListening(true)
     setNotes([])
     setResult(null)
     setArmed(false)
     playPhrase(earPcs, { gap: 0.45 })
-    timerRef.current = setTimeout(() => setArmed(true), earPcs.length * 450 + 350)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      setListening(false)
+      setArmed(true)
+    }, earPcs.length * 450 + 350)
   }
 
   function goTo(next) {
@@ -150,6 +155,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     if (timerRef.current) clearTimeout(timerRef.current)
     if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
     if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
+    setListening(false)
     stopBar()
     tailTimerRef.current = null
     revealTimerRef.current = null
@@ -238,7 +244,6 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     const degree = pickRapidDegree(Math.random, confidenceRef.current)
     rapidDegreeRef.current = degree
     solvedRef.current = false
-    setSolved(false)
     setRapidDegree(degree)
     setChordMsg('')
     chordNotesRef.current = []
@@ -329,7 +334,6 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     })
     recordAttempt('warmup', false)
     solvedRef.current = true
-    setSolved(true)
     comboRef.current = outcome.combo
     bestComboRef.current = Math.max(bestComboRef.current, outcome.combo)
     scoreRef.current += outcome.points
@@ -414,19 +418,20 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     if (phase === 'rapid') {
       const target = seventhByDegree(keyId, rapidDegreeRef.current)
       const step = rapidChordStep({ target, played: chordNotesRef.current, pc })
+      if (step.kind === 'miss') {
+        missRapid(true)
+        return
+      }
+      // Any key on the current chord keeps the clock alive, solved or not.
+      restartBar()
       if (step.kind === 'ignore') {
         // The chord is already clean: keep paying while the player comps it.
         if (target.includes(pc)) awardHold()
         return
       }
-      if (step.kind === 'miss') {
-        missRapid(true)
-        return
-      }
       chordNotesRef.current = step.played
       if (Number.isFinite(note)) chordMidiRef.current = [...chordMidiRef.current, note]
       setPlayed(step.played)
-      restartBar()
       if (step.solved) solveRapid()
       return
     }
@@ -615,21 +620,26 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
       {phase === 'ear' ? (
         <>
           <div className="stagefoot">
-            <button type="button" className="btn btn--signal" onClick={hearEar} disabled={disabled}>
-              HEAR IT
+            <button type="button" className="btn btn--signal" onClick={hearEar}>
+              {listening ? 'PLAYING…' : 'HEAR IT'}
             </button>
             <button
               type="button"
               className="btn"
               onClick={() => setRevealed((n) => Math.min(earPcs.length, n + 1))}
-              disabled={disabled || revealed >= earPcs.length}
+              disabled={revealed >= earPcs.length}
             >
               REVEAL NEXT
             </button>
           </div>
           <p className="hintline">
-            {armed ? 'YOUR TURN — PLAY THE FOUR NOTES.' : 'LISTEN ONCE, THEN PLAY.'}
+            {listening
+              ? 'PLAYING THE FOUR NOTES.'
+              : armed
+                ? 'YOUR TURN — PLAY THE FOUR NOTES.'
+                : 'LISTEN ONCE, THEN PLAY.'}
           </p>
+          <p className="hintline">{SILENT_HINT}</p>
           <div className="notecells" aria-label="Ear notes">
             {earPcs.map((pc, index) => {
               const playedPc = played[index]
@@ -671,7 +681,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                 NEXT · CHORDS
               </button>
               {!result.passed ? (
-                <button type="button" className="btn" onClick={hearEar} disabled={disabled}>
+                <button type="button" className="btn" onClick={hearEar}>
                   LISTEN AGAIN
                 </button>
               ) : null}
@@ -736,7 +746,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                   </div>
                 ) : null}
               </div>
-              <ChordBar runKey={barKey} live={barLive} solved={solved} />
+              <ChordBar runKey={barKey} live={barLive} />
               <div className="confidence" aria-label="Confidence by chord degree">
                 {confidence.map((value, index) => (
                   <div
@@ -816,7 +826,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
               ))}
             </div>
             <div className="stagefoot">
-              <button type="button" className="btn" onClick={hearBoogie} disabled={disabled}>
+              <button type="button" className="btn" onClick={hearBoogie}>
                 HEAR THE BOOGIE
               </button>
               <button
@@ -878,7 +888,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
 
 // The bar is the visible clock for a rapid-fire prompt. It drains from full to
 // empty; every state change of runKey restarts it from the top.
-function ChordBar({ runKey, live, solved }) {
+function ChordBar({ runKey, live }) {
   const [percent, setPercent] = useState(100)
 
   useEffect(() => {
@@ -896,7 +906,7 @@ function ChordBar({ runKey, live, solved }) {
 
   return (
     <div
-      className={`chordbar${live ? ' is-live' : ''}${solved ? ' is-solved' : ''}`}
+      className={`chordbar${live ? ' is-live' : ''}`}
       aria-hidden="true"
     >
       <span className="chordbar__fill" style={{ width: `${percent}%` }} />
