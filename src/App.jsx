@@ -8,6 +8,7 @@ import Lessons from './components/Lessons.jsx'
 import Ledger from './components/Ledger.jsx'
 import LedgerDetail from './components/LedgerDetail.jsx'
 import ManualBar from './components/ManualBar.jsx'
+import Falling from './components/Falling.jsx'
 import { MidiProvider } from './hooks/MidiContext.jsx'
 import { useSession } from './session/useSession.js'
 import { useRank } from './session/useRank.js'
@@ -139,11 +140,15 @@ export default function App() {
           onOpenLedger={() => navigate('stats')}
           onOpenRun={openRun}
           onOpenWardrobe={() => navigate('stats?wardrobe=open')}
+          onOpenArcade={() => navigate('test/falling')}
           rank={rank}
           onTotalXp={applyTotalXp}
         />
       )
     }
+  } else if (route.view === 'test') {
+    // Hidden prototype route: never in ROUTES, never in the nav.
+    content = route.sub === 'falling' ? <Falling onExit={() => navigate('session')} /> : null
   } else if (route.view === 'lessons') {
     content = (
       <Lessons type={route.type} foundation={route.foundation} onTry={startLesson} />

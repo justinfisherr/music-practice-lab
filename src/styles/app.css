@@ -5638,3 +5638,495 @@ button.artistcard__hint:focus-visible {
     font-size: clamp(24px, 7vw, 28px);
   }
 }
+
+/* ---- Falling-note prototype: #test/falling. Throwaway surface. ---- */
+.arcade {
+  --arcade-bar: 52px;
+  --arcade-hud: 40px;
+  --arcade-tray: 56px;
+  --fall-ms: 900ms;
+  --note-h: 44px;
+  --chord-row: 22px;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  padding-bottom: calc(var(--pad-h) + var(--safe-b));
+}
+
+.arcade__bar {
+  flex: 0 0 var(--arcade-bar);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.arcade__key {
+  white-space: nowrap;
+}
+.arcade__timer {
+  margin-left: auto;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.arcade__btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  border: 2px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.arcade__hud {
+  flex: 0 0 var(--arcade-hud);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+  border-bottom: 3px solid var(--ink);
+  background: var(--panel);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.arcade__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.arcade__statlabel {
+  color: var(--muted);
+}
+.arcade__statval {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.arcade__mult {
+  margin-left: auto;
+  margin-right: 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.arcade__field {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.arcade__field--summary {
+  overflow-y: auto;
+}
+
+/* The lane uses the pad's own grid, so column N sits over key N. */
+.arcade__lane {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--pad-gap);
+  padding-inline: 8px;
+  overflow: hidden;
+}
+.arcade__note {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--note-h);
+  border: 3px solid var(--ink);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  box-shadow: 2px 2px 0 var(--ink);
+  animation: arcade-fall var(--fall-ms) linear both;
+}
+.arcade__note--chord {
+  flex-direction: column;
+  font-size: 13px;
+  border-color: var(--signal);
+}
+.arcade__pc {
+  display: block;
+  line-height: 1;
+}
+.arcade__note--chord .arcade__pc {
+  line-height: var(--chord-row);
+}
+.arcade__note.is-miss {
+  background: var(--ink);
+  color: var(--bg);
+  animation: arcade-miss 90ms linear both;
+}
+.arcade__note.is-hit,
+.arcade__note.is-bomb {
+  background: var(--ink);
+  color: var(--bg);
+}
+.arcade__note.is-bomb {
+  border-color: var(--signal);
+}
+
+/* A backgrounded tab freezes the field, notes and stamps alike. */
+.arcade__field.is-paused .arcade__note {
+  animation-play-state: paused;
+}
+
+@keyframes arcade-fall {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(calc(var(--field-h, 0px) - var(--arcade-tray) - 100%));
+  }
+}
+@keyframes arcade-miss {
+  from {
+    transform: translateY(calc(var(--field-h, 0px) - var(--arcade-tray) - 100%));
+  }
+  to {
+    transform: translateY(calc(var(--field-h, 0px) - 100%));
+  }
+}
+
+/* Everything past the line is cropped by this band. */
+.arcade__tray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--arcade-tray);
+  border-top: 3px solid var(--ink);
+  background: var(--bg);
+  z-index: 2;
+}
+
+.arcade__stamps {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--pad-gap);
+  padding-inline: 8px;
+  padding-bottom: calc(var(--arcade-tray) + 8px);
+  align-items: end;
+  pointer-events: none;
+  z-index: 3;
+}
+.arcade__stamp {
+  justify-self: center;
+  transform: translateY(-8px);
+  border: 2px solid var(--ink);
+  padding: 1px 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.arcade__stamp--hit {
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 16px;
+}
+.arcade__stamp--bomb {
+  background: var(--ink);
+  border-color: var(--signal);
+  color: var(--bg);
+}
+.arcade__stamp--ok {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ok-ink);
+  font-size: 14px;
+}
+.arcade__stamp--stray {
+  color: var(--signal-ink);
+}
+
+/* Reduced motion: no travel, a static read of the same information. */
+.arcade__static {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 8px calc(var(--arcade-tray) + 8px);
+  z-index: 1;
+}
+.arcade__next {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  border: 3px solid var(--ink);
+  background: var(--panel);
+}
+.arcade__staticlabel {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+.arcade__staticname {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.arcade__online {
+  flex: 0 0 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 3px solid var(--ink);
+  background: var(--panel);
+}
+.arcade__onlinename {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+}
+.arcade__segments {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  height: 8px;
+  margin-top: auto;
+}
+.arcade__segment {
+  background: var(--heat-1);
+}
+.arcade__segment.is-on {
+  background: var(--ink);
+}
+
+.arcade__ready,
+.arcade__count,
+.arcade__confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.arcade__ready {
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+}
+.arcade__count {
+  align-items: center;
+  justify-content: center;
+}
+.arcade__confirm {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+.arcade__confirm .arcade__btn {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.arcade__countword {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 3px;
+}
+.arcade__eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+.arcade__readytitle {
+  font-size: clamp(20px, 6vw, 26px);
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.arcade__readycopy {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.arcade__start,
+.arcade__again {
+  min-height: 48px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--signal);
+  color: var(--on-fill);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  cursor: pointer;
+}
+
+.arcade__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 16px 24px;
+}
+.arcade__scorelabel {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+.arcade__scorenum {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.arcade__best {
+  align-self: flex-start;
+  border: 3px solid var(--ink);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+}
+.arcade__best--new {
+  border-color: var(--signal);
+  color: var(--signal-ink);
+}
+.arcade__cells {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  border: 3px solid var(--ink);
+  background: var(--ink);
+}
+.arcade__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  background: var(--bg);
+}
+.arcade__cellval {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.arcade__celllabel {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+.arcade__say {
+  margin: 4px 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.arcade__desk {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.arcade__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The pad caps at 520px on a wide screen; the field follows it. */
+@media (min-width: 768px) {
+  .arcade__lane,
+  .arcade__stamps,
+  .arcade__static {
+    max-width: 520px;
+    margin-inline: auto;
+  }
+}
+
+/* The pad's destination hint: two hard states, no animation. */
+.arcade .notepad__key.is-hint {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.arcade .notepad__key.is-hint-bar {
+  box-shadow: inset 0 3px 0 0 var(--ink);
+}
+.arcade .notepad__key.is-flash {
+  background: var(--signal);
+}
+
+.arcade__land {
+  display: none;
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .arcade {
+    padding-bottom: 0;
+  }
+  .arcade > * {
+    display: none;
+  }
+  .arcade__land {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100dvh;
+    margin: 0;
+    padding: 20px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arcade__note {
+    animation: none;
+  }
+}

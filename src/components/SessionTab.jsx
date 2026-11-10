@@ -31,6 +31,7 @@ export default function SessionTab({
   onOpenLedger,
   onOpenRun,
   onOpenWardrobe,
+  onOpenArcade,
   rank,
   onTotalXp,
 }) {
@@ -403,6 +404,9 @@ export default function SessionTab({
         <span>{runs.length} SESSIONS IN THE LEDGER</span>
         <button type="button" className="linkbtn" onClick={onOpenLedger}>
           OPEN LEDGER
+        </button>
+        <button type="button" className="linkbtn" onClick={onOpenArcade}>
+          ARCADE (TEST)
         </button>
       </div>
     </section>

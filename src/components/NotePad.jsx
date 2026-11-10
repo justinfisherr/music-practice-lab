@@ -9,7 +9,7 @@ const IDLE = 'TAP NOTES · ONE AT A TIME'
 
 // One octave of pitch classes, tapped one at a time. A tap is injected into the
 // MIDI context, so every drill grades it exactly like the hardware.
-export default function NotePad({ keyId, disabled }) {
+export default function NotePad({ keyId, disabled, hint }) {
   const midi = useMidiContext()
   const [held, setHeld] = useState(null)
   const [entered, setEntered] = useState([])
@@ -62,7 +62,9 @@ export default function NotePad({ keyId, disabled }) {
           <button
             key={name}
             type="button"
-            className={`notepad__key${held === pc ? ' is-held' : ''}`}
+            className={`notepad__key${held === pc ? ' is-held' : ''}${
+              hint && hint.pcs.includes(pc) ? (hint.bar ? ' is-hint-bar' : ' is-hint') : ''
+            }`}
             aria-label={ARIA[pc]}
             aria-disabled={disabled || undefined}
             onPointerDown={(event) => {

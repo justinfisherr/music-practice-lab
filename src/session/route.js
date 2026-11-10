@@ -33,6 +33,11 @@ export function parseHash(hash = typeof window === 'undefined' ? '' : window.loc
     return { view: 'session', sub }
   }
 
+  if (parts[0] === 'test') {
+    // Hidden prototype pages: #test/falling. Never in ROUTES, never in the nav.
+    return { view: 'test', sub: parts[1] || null }
+  }
+
   if (VIEWS.includes(parts[0])) return { view: parts[0] }
 
   // Unknown or empty hashes render the default tab without rewriting the URL.

@@ -31,6 +31,10 @@ test('ledger deep links keep the stats contract', () => {
   })
 })
 
+test('the hidden arcade test route parses', () => {
+  assert.deepEqual(parseHash('#test/falling'), { view: 'test', sub: 'falling' })
+})
+
 test('crate deep links keep the record id', () => {
   assert.deepEqual(parseHash('#crate'), { view: 'crate', id: null })
   assert.deepEqual(parseHash('#crate/abbey-lincoln--abbey-sings-abbey'), {
