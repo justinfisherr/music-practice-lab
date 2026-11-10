@@ -2949,14 +2949,6 @@ select {
   stroke: var(--line);
   stroke-width: 1.5;
 }
-.wheel__sector.is-live .wheel__sector-fill {
-  stroke: var(--ok);
-  stroke-width: 5;
-}
-.wheel__sector.is-outside .wheel__sector-fill {
-  stroke: var(--signal);
-  stroke-width: 5;
-}
 .wheel__minor {
   fill: var(--muted);
   font-family: var(--mono);
@@ -2977,6 +2969,18 @@ select {
 .wheel__sector.is-active .wheel__sector-fill {
   fill: var(--ink);
 }
+/* A held note fills its own sector: in key = ok, outside = signal. Declared
+   after .is-active so a lit sector beats the current-key ink fill. */
+.wheel__sector.is-hit .wheel__sector-fill {
+  fill: color-mix(in srgb, var(--ok) 34%, var(--panel));
+  stroke: var(--ok);
+  stroke-width: 5;
+}
+.wheel__sector.is-hit-out .wheel__sector-fill {
+  fill: color-mix(in srgb, var(--signal) 34%, var(--panel));
+  stroke: var(--signal);
+  stroke-width: 5;
+}
 .wheel__tooth {
   stroke: var(--line);
   stroke-width: 3;
@@ -2991,25 +2995,10 @@ select {
 .wheel__label.is-active {
   fill: var(--bg);
 }
-/* A held pitch class lights the sector that shares its tonic. */
-.wheel__label.is-played {
-  fill: var(--signal-ink);
-}
-.wheel__label.is-active.is-played {
-  fill: var(--bg);
-}
-.wheel__sector.is-played .wheel__tooth {
-  stroke: var(--signal);
-  stroke-width: 5;
-}
-.wheel__dot {
-  fill: var(--bg);
-  stroke: var(--line);
-  stroke-width: 2;
-}
-.wheel__dot.is-played {
-  fill: var(--signal);
-  stroke: var(--line);
+/* A held note lights its own sector: green inside the key, red outside it. */
+.wheel__label.is-hit,
+.wheel__label.is-hit-out {
+  fill: var(--ink);
 }
 .wheel__tonight {
   fill: var(--muted);
@@ -6543,4 +6532,11 @@ button.artistcard__hint:focus-visible {
   .homelab {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+/* ---- scale lab: the key map sits above the three homes ---- */
+.scalelab__wheel {
+  margin-bottom: 14px;
+}
+.scalelab__wheel .wheel__stage {
+  max-width: 280px;
 }

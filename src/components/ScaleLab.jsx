@@ -1,9 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNoteSequence } from '../hooks/useNoteSequence.js'
+import { useMidiContext } from '../hooks/MidiContext.jsx'
 import { gradeSequence, gradeSet } from '../session/grade.js'
 import { playPhrase, unlockAudio } from '../session/audio.js'
 import { labForKey, seventhByDegreeForScale } from '../data/scaleLab.js'
 import PianoExample from './PianoExample.jsx'
+import Wheel from './Wheel.jsx'
 
 const HOME_ORDER = ['major', 'relative', 'blues']
 const HOME_HINT = {
@@ -29,6 +31,7 @@ export default function ScaleLab({ keyId, disabled, recordAttempt, onContinue })
   const [callIndex, setCallIndex] = useState(0)
   const [callCorrect, setCallCorrect] = useState(0)
   const [callRun, setCallRun] = useState(false)
+  const midi = useMidiContext()
 
   const notesRef = useRef([])
   const modeRef = useRef(null)
@@ -160,6 +163,15 @@ export default function ScaleLab({ keyId, disabled, recordAttempt, onContinue })
 
   return (
     <div className="scalelab">
+      <div className="scalelab__wheel">
+        <Wheel
+          tonightKey={keyId}
+          activeKey={keyId}
+          activeNotes={midi.activeNotes}
+          disabled={disabled}
+          spinnable={false}
+        />
+      </div>
       <div className="homelab">
         {HOME_ORDER.map((id) => {
           const home = homes[id]

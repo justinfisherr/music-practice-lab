@@ -59,6 +59,7 @@ export default function Wheel({
   activeNotes = [],
   disabled = false,
   phone = false,
+  spinnable = true,
   onBonus,
   onTonight,
   onStartBonus,
@@ -94,7 +95,7 @@ export default function Wheel({
   // One authored spin per LA date on mount, landing tonight's sector at 12.
   useEffect(() => {
     if (!tonightKey) return
-    if (reduced || loadSpun(date)) {
+    if (!spinnable || reduced || loadSpun(date)) {
       setRotation(angleForKey(tonightKey))
       return
     }
@@ -106,7 +107,7 @@ export default function Wheel({
       settle()
     }, SPIN_MS)
     queue(() => settle(), SPIN_MS + 1500)
-  }, [date, tonightKey, reduced])
+  }, [date, tonightKey, reduced, spinnable])
 
   // When the parent switches between tonight and bonus, rotate to the new
   // sector without unwinding. A spin in flight owns the rotation.
@@ -119,7 +120,7 @@ export default function Wheel({
   }, [activeKey, variant, reduced])
 
   function spin() {
-    if (disabled || spinningRef.current) return
+    if (!spinnable || disabled || spinningRef.current) return
     const next = bonusForKey(date, tonightKey, bonusKey && bonusKey !== tonightKey ? bonusKey : null)
     if (next === tonightKey) return
     lastKeyRef.current = next
@@ -146,7 +147,6 @@ export default function Wheel({
   const activeKeyObj = MAJOR_KEYS[activeIndex] || MAJOR_KEYS[0]
   const diatonicPcs = [0, 2, 4, 5, 7, 9, 11].map((step) => (activeKeyObj.tonic + step) % 12)
   const livePcs = new Set((activeNotes || []).map((n) => ((n % 12) + 12) % 12))
-  const liveAny = livePcs.size > 0
   const liveOutside = [...livePcs].some((pc) => !diatonicPcs.includes(pc))
 
   return (
@@ -170,18 +170,17 @@ export default function Wheel({
           >
             {MAJOR_KEYS.map((key, index) => {
               const isActive = key.id === active
-              const played = livePcs.has(((key.tonic % 12) + 12) % 12)
+              const tonic = ((key.tonic % 12) + 12) % 12
+              const held = livePcs.has(tonic)
+              const hitClass = held ? (diatonicPcs.includes(tonic) ? ' is-hit' : ' is-hit-out') : ''
               const dist = Math.min(
                 (index - activeIndex + 12) % 12,
                 (activeIndex - index + 12) % 12,
               )
-              const liveClass = isActive && liveAny ? (liveOutside ? ' is-outside' : ' is-live') : ''
               return (
                 <g
                   key={key.id}
-                  className={`wheel__sector${isActive ? ' is-active' : ''}${liveClass}${
-                    played ? ' is-played' : ''
-                  }`}
+                  className={`wheel__sector${isActive ? ' is-active' : ''}${hitClass}`}
                   style={{ '--dist': dist }}
                   transform={`rotate(${index * 30} ${CX} ${CY})`}
                 >
@@ -197,7 +196,7 @@ export default function Wheel({
                     <text
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      className={`wheel__label${isActive ? ' is-active' : ''}${played ? ' is-played' : ''}`}
+                      className={`wheel__label${isActive ? ' is-active' : ''}${hitClass}`}
                     >
                       {keyDisplay(key.id)}
                     </text>
@@ -222,12 +221,6 @@ export default function Wheel({
                       {key.scale[5]}m
                     </text>
                   </g>
-                  <circle
-                    cx={CX}
-                    cy={CY - R_IN + 12}
-                    r={5}
-                    className={`wheel__dot${played ? ' is-played' : ''}`}
-                  />
                 </g>
               )
             })}
@@ -258,25 +251,27 @@ export default function Wheel({
         </p>
       ) : null}
 
-      <div className="wheel__actions">
-        <button type="button" className="btn btn--ghost" onClick={spin} disabled={disabled}>
-          {spinning ? 'SPINNING…' : 'SPIN'}
-        </button>
-        {variant === 'bonus' ? (
-          <button type="button" className="btn" onClick={onTonight} disabled={disabled || spinning}>
-            BACK TO TODAY
+      {spinnable ? (
+        <div className="wheel__actions">
+          <button type="button" className="btn btn--ghost" onClick={spin} disabled={disabled}>
+            {spinning ? 'SPINNING…' : 'SPIN'}
           </button>
-        ) : bonusKey && bonusKey !== tonightKey ? (
-          <button
-            type="button"
-            className="btn btn--signal"
-            onClick={() => onStartBonus?.(bonusKey)}
-            disabled={disabled || spinning}
-          >
-            {phone ? `PLAY BONUS · ${keyDisplay(bonusKey)}` : 'START BONUS'}
-          </button>
-        ) : null}
-      </div>
+          {variant === 'bonus' ? (
+            <button type="button" className="btn" onClick={onTonight} disabled={disabled || spinning}>
+              BACK TO TODAY
+            </button>
+          ) : bonusKey && bonusKey !== tonightKey ? (
+            <button
+              type="button"
+              className="btn btn--signal"
+              onClick={() => onStartBonus?.(bonusKey)}
+              disabled={disabled || spinning}
+            >
+              {phone ? `PLAY BONUS · ${keyDisplay(bonusKey)}` : 'START BONUS'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <p className="wheel__foot">
         SHADED BY FIFTHS FROM {keyDisplay(active)} · NEAR → FAR
