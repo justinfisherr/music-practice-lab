@@ -3400,23 +3400,16 @@ select {
 }
 .chordbar__fill {
   display: block;
-  width: 100%;
   height: 100%;
   background: var(--signal-ink);
-  animation-name: chordbar-drain;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
+  transition: width 60ms linear;
 }
-.chordbar:not(.is-live) .chordbar__fill {
-  animation: none;
-  width: 100%;
+.chordbar.is-solved .chordbar__fill {
+  background: var(--ink);
 }
-@keyframes chordbar-drain {
-  from {
-    width: 100%;
-  }
-  to {
-    width: 0%;
+@media (prefers-reduced-motion: reduce) {
+  .chordbar__fill {
+    transition: none;
   }
 }
 .confidence {

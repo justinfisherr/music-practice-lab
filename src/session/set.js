@@ -159,6 +159,7 @@ export const INVERSION_BONUS = 50
 // tones scores the chord but does not advance it.
 export const CHORD_BAR_MS = 4000
 export const CHORD_CLEAN_POINTS = 100
+export const CHORD_HOLD_POINTS = 10
 export const CHORD_MISS_POINTS = -25
 export const CONFIDENCE_STEP = 0.25
 export const CONFIDENCE_FLOOR_WEIGHT = 0.15

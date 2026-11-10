@@ -10,6 +10,7 @@ import {
   boogiePcs,
   bumpConfidence,
   CHORD_BAR_MS,
+  CHORD_HOLD_POINTS,
   CHORD_MISS_POINTS,
   CHORD_TAIL_CAP_MS,
   CHORD_TAIL_SILENCE_MS,
@@ -53,6 +54,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const [rapidDegree, setRapidDegree] = useState(1)
   const [barKey, setBarKey] = useState(0)
   const [barLive, setBarLive] = useState(false)
+  const [solved, setSolved] = useState(false)
   const [boogieId, setBoogieId] = useState(1)
   const [boogieRun, setBoogieRun] = useState(false)
   const [boogieMsg, setBoogieMsg] = useState('')
@@ -236,6 +238,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     const degree = pickRapidDegree(Math.random, confidenceRef.current)
     rapidDegreeRef.current = degree
     solvedRef.current = false
+    setSolved(false)
     setRapidDegree(degree)
     setChordMsg('')
     chordNotesRef.current = []
@@ -326,6 +329,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     })
     recordAttempt('warmup', false)
     solvedRef.current = true
+    setSolved(true)
     comboRef.current = outcome.combo
     bestComboRef.current = Math.max(bestComboRef.current, outcome.combo)
     scoreRef.current += outcome.points
@@ -337,8 +341,14 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     setChordClean(correctRef.current)
     setConfidence(confidenceRef.current)
     pop(outcome.points, 'CLEAN')
-    setChordMsg(`${ROMAN[degree - 1]} CLEAN · +${outcome.points} · STAY ON IT`)
+    setChordMsg(`${ROMAN[degree - 1]} CLEAN · +${outcome.points} · KEEP COMPING +${CHORD_HOLD_POINTS}`)
     setRevealChord(null)
+  }
+
+  function awardHold() {
+    scoreRef.current += CHORD_HOLD_POINTS
+    setScore(scoreRef.current)
+    pop(CHORD_HOLD_POINTS, 'HOLD')
   }
 
   function missRapid(penalty) {
@@ -404,7 +414,11 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     if (phase === 'rapid') {
       const target = seventhByDegree(keyId, rapidDegreeRef.current)
       const step = rapidChordStep({ target, played: chordNotesRef.current, pc })
-      if (step.kind === 'ignore') return
+      if (step.kind === 'ignore') {
+        // The chord is already clean: keep paying while the player comps it.
+        if (target.includes(pc)) awardHold()
+        return
+      }
       if (step.kind === 'miss') {
         missRapid(true)
         return
@@ -722,13 +736,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                   </div>
                 ) : null}
               </div>
-              <div className={`chordbar${barLive ? ' is-live' : ''}`} aria-hidden="true">
-                <span
-                  className="chordbar__fill"
-                  key={barKey}
-                  style={{ animationDuration: `${CHORD_BAR_MS}ms` }}
-                />
-              </div>
+              <ChordBar runKey={barKey} live={barLive} solved={solved} />
               <div className="confidence" aria-label="Confidence by chord degree">
                 {confidence.map((value, index) => (
                   <div
@@ -864,6 +872,34 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
           )}
         </>
       ) : null}
+    </div>
+  )
+}
+
+// The bar is the visible clock for a rapid-fire prompt. It drains from full to
+// empty; every state change of runKey restarts it from the top.
+function ChordBar({ runKey, live, solved }) {
+  const [percent, setPercent] = useState(100)
+
+  useEffect(() => {
+    if (!live) {
+      setPercent(100)
+      return undefined
+    }
+    const start = performance.now()
+    const timer = setInterval(() => {
+      const left = 1 - (performance.now() - start) / CHORD_BAR_MS
+      setPercent(Math.max(0, Math.round(left * 100)))
+    }, 50)
+    return () => clearInterval(timer)
+  }, [runKey, live])
+
+  return (
+    <div
+      className={`chordbar${live ? ' is-live' : ''}${solved ? ' is-solved' : ''}`}
+      aria-hidden="true"
+    >
+      <span className="chordbar__fill" style={{ width: `${percent}%` }} />
     </div>
   )
 }
