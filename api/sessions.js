@@ -488,7 +488,13 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       if (rateLimited(req)) return write(res, 429, { error: 'rate_limited' })
       const input = validate(await body(req))
-      const xp = deriveXp(input.stages, input.status, input.kind, input.scope)
+      const xp = deriveXp(
+        input.stages,
+        input.status,
+        input.kind,
+        input.scope,
+        input.payload?.cleared,
+      )
       const { rows } = await pool.query(
         `INSERT INTO practice.sessions
           (id, session_date, key_id, seed, status, started_at, ended_at, duration_ms,

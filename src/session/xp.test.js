@@ -92,11 +92,14 @@ test('v3 completion bonus is session scope only', () => {
 })
 
 // ---- SEVENTH HOUSE ---------------------------------------------------------
-test('a completed house pays 35, an abandoned one pays nothing', () => {
-  assert.equal(deriveXp([], 'done', 'arcade', 'session'), 35)
-  assert.equal(deriveXp([], 'abandoned', 'arcade', 'session'), 0)
-  assert.equal(arcadeXp('done'), ARCADE_XP)
-  assert.equal(arcadeXp('abandoned'), 0)
+test('a house pays by the chords it banked, finished or stopped early', () => {
+  assert.equal(deriveXp([], 'done', 'arcade', 'session', 14), 35)
+  assert.equal(deriveXp([], 'abandoned', 'arcade', 'session', 7), 18)
+  assert.equal(deriveXp([], 'abandoned', 'arcade', 'session', 0), 0)
+  assert.equal(arcadeXp(14), ARCADE_XP)
+  assert.equal(arcadeXp(7), 18)
+  assert.equal(arcadeXp(0), 0)
+  assert.equal(arcadeXp(99), ARCADE_XP, 'clamped at a full house')
 })
 
 test('empty-stages graded done still pays the 15 completion bonus', () => {

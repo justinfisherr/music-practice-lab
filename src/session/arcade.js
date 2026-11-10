@@ -6,7 +6,8 @@ import { diatonicSevenths, keyById } from '../data/scales.js'
 
 export const VERSION = 5
 export const GOAL = 14
-export const NOTE_GAP = 4 // single-note cues between two chord stations
+export const NOTE_GAP = 2 // single-note cues between two chord stations
+export const REQUEUE_GAP = 4 // a missed station returns at least this many slots later
 export const CAP_CUES = 240 // hard stop: the run can never grow forever
 export const CAP_MS = 6 * 60 * 1000
 export const PERFECT_MS = 350 // tap this soon after the light = PERFECT
@@ -170,7 +171,7 @@ export function resolveStation(run, degree, correct) {
     run.cleared += 1
   } else {
     run.degrees[degree].missed += 1
-    run.queue.splice(Math.min(NOTE_GAP, run.queue.length), 0, degree)
+    run.queue.splice(Math.min(REQUEUE_GAP, run.queue.length), 0, degree)
   }
   if (run.cleared >= GOAL) {
     run.ended = true
@@ -183,6 +184,14 @@ export function runAccuracy(run) {
   const graded = run.cues.hits + run.cues.late + run.cues.misses
   if (!graded) return 0
   return Math.round((100 * (run.cues.hits + run.cues.late * 0.5)) / graded)
+}
+
+// Real elapsed play time: wall clock from START, minus every paused span.
+// Both timestamps are Date.now() ms; performance.now() is a different clock and
+// mixing the two made `now - startedAt - paused` negative, which clamped to 0.
+export function playDuration(run, now = Date.now()) {
+  const paused = (run.pausedMs || 0) + (run.pausedAt ? now - run.pausedAt : 0)
+  return Math.max(0, Math.round(now - run.startedAt - paused))
 }
 
 // The POST body. Field names follow the session contract; the validator derives

@@ -4,12 +4,14 @@ import {
   CAP_CUES,
   GOAL,
   NOTE_GAP,
+  REQUEUE_GAP,
   buildQueue,
   createRun,
   gradeTiming,
   hashSeed,
   intervalFor,
   nextCue,
+  playDuration,
   resolveStation,
   runAccuracy,
   stationChord,
@@ -97,10 +99,13 @@ test('a missed station returns at least four station slots later', () => {
   const first = seen.indexOf(missedDegree)
   const again = seen.indexOf(missedDegree, first + 1)
   assert.ok(again > first, 'the missed type came back')
-  assert.ok(again - first > NOTE_GAP, `${again - first} stations later, expected more than 4`)
+  assert.ok(
+    again - first > REQUEUE_GAP,
+    `${again - first} stations later, expected at least ${REQUEUE_GAP} in between`,
+  )
 })
 
-test('no two stations are adjacent: four single notes sit between', () => {
+test('no two stations are adjacent: single notes sit between', () => {
   for (const seed of SEEDS) {
     const { kinds } = play({ keyId: 'C', seed })
     for (let i = 1; i < kinds.length; i++) {
@@ -113,7 +118,8 @@ test('no two stations are adjacent: four single notes sit between', () => {
     assert.equal(firstStation, 0, 'the run opens on a station')
     const stations = kinds.filter((kind) => kind === 'station').length
     const notes = kinds.filter((kind) => kind !== 'station').length
-    assert.equal(notes, (stations - 1) * NOTE_GAP, 'exactly four notes between stations')
+    assert.equal(notes, (stations - 1) * NOTE_GAP, 'the gap between stations is fixed')
+    assert.equal(NOTE_GAP, 2, 'two filler cues, not four')
   }
 })
 
@@ -167,6 +173,27 @@ test('a mixed run still terminates at fourteen clears', () => {
   assert.ok(stations.length > GOAL, 'misses cost extra stations')
   assert.ok(run.cues.total <= CAP_CUES)
   assert.ok(stations.filter((station) => !station.correct).length > 0)
+})
+
+test('play time is wall clock minus pauses, and never zero from a live run', () => {
+  const base = Date.now() - 600_000
+  const plain = { startedAt: base, pausedMs: 0, pausedAt: 0 }
+  assert.equal(playDuration(plain, base + 600_000), 600_000)
+
+  // 30s already banked as paused, then a live pause from t+100s to t+160s.
+  const paused = { startedAt: base, pausedMs: 30_000, pausedAt: base + 100_000 }
+  assert.equal(playDuration(paused, base + 160_000), 70_000)
+
+  const over = { startedAt: base, pausedMs: 900_000, pausedAt: 0 }
+  assert.equal(playDuration(over, base + 600_000), 0, 'never negative')
+})
+
+test('an early stop banks a real duration and a non-zero share', () => {
+  const endedAt = Date.now()
+  const startedAt = endedAt - 200_000
+  const run = { startedAt, pausedMs: 20_000, pausedAt: 0 }
+  const durationMs = playDuration(run, endedAt)
+  assert.equal(durationMs, 180_000)
 })
 
 test('timing and the note ramp are unchanged', () => {
@@ -224,14 +251,19 @@ test('an abandoned row is abandoned and still valid', () => {
     }
   }
   const endedAt = new Date()
+  const startedAt = endedAt.getTime() - 200_000
+  const durationMs = playDuration({ startedAt, pausedMs: 20_000, pausedAt: 0 }, endedAt.getTime())
   const row = toArcadeRow(run, {
     id: 'house-test-0002',
     date: endedAt.toISOString().slice(0, 10),
-    startedAt: new Date(endedAt.getTime() - 20_000).toISOString(),
+    startedAt: new Date(startedAt).toISOString(),
     endedAt: endedAt.toISOString(),
-    durationMs: 20_000,
+    durationMs,
   })
   assert.equal(row.status, 'abandoned')
   assert.equal(row.payload.complete, false)
-  assert.equal(validate(row).scope, 'session')
+  assert.ok(row.durationMs > 0, 'the row carries real elapsed play time')
+  const valid = validate(row)
+  assert.equal(valid.scope, 'session')
+  assert.equal(valid.durationMs, 180_000)
 })

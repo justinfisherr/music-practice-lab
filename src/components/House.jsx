@@ -9,6 +9,7 @@ import {
   createRun,
   gradeTiming,
   nextCue,
+  playDuration,
   resolveStation,
   runAccuracy,
   stationChord,
@@ -168,8 +169,7 @@ export default function House({ keyId = tonightKey(), onExit, onSubmit }) {
       if (!run || run.ended) return
       run.ended = true
       const now = Date.now()
-      const paused = run.pausedMs + (run.pausedAt ? now - run.pausedAt : 0)
-      const durationMs = Math.max(0, now - run.startedAt - paused)
+      const durationMs = playDuration(run, now)
       const row = toArcadeRow(run.engine, {
         id: run.id,
         date: laDate(new Date(run.startedAt)),
@@ -295,16 +295,20 @@ export default function House({ keyId = tonightKey(), onExit, onSubmit }) {
   const pauseRun = useCallback(() => {
     const run = runRef.current
     if (!run || run.ended || run.pausedAt || phaseRef.current !== 'run') return
-    run.pausedAt = performance.now()
+    // Two clocks: Date.now() measures the pause for the row, performance.now()
+    // shifts the cue windows.
+    run.pausedAt = Date.now()
+    run.pausedPerf = performance.now()
     setPhase('paused')
   }, [])
 
   const resumeRun = useCallback(() => {
     const run = runRef.current
     if (!run || !run.pausedAt) return
-    const hidden = performance.now() - run.pausedAt
+    const hidden = performance.now() - run.pausedPerf
+    run.pausedMs += Date.now() - run.pausedAt
     run.pausedAt = 0
-    run.pausedMs += hidden
+    run.pausedPerf = 0
     if (run.active) {
       run.active.litAt += hidden
       run.active.darkAt += hidden
@@ -337,6 +341,7 @@ export default function House({ keyId = tonightKey(), onExit, onSubmit }) {
       startedAt: Date.now(),
       pausedMs: 0,
       pausedAt: 0,
+      pausedPerf: 0,
       active: null,
       mode: 'stream',
       station: null,
@@ -486,9 +491,10 @@ export default function House({ keyId = tonightKey(), onExit, onSubmit }) {
   }
 
   function leave() {
+    // End & bank: submit the partial run, then show what was banked.
     const run = runRef.current
     if (run && !run.ended) finish(run)
-    onExit()
+    else onExit()
   }
 
   const ordinal = Math.min(GOAL, view.cleared + 1)
@@ -518,7 +524,7 @@ export default function House({ keyId = tonightKey(), onExit, onSubmit }) {
           <div className="house__summary">
             <span className="house__stamp">
               <HouseMark size={34} />
-              <span>{summary.complete ? 'HOUSE BUILT' : 'HOUSE UNFINISHED'}</span>
+              <span>{summary.complete ? 'HOUSE BUILT' : 'HOUSE BANKED'}</span>
             </span>
             <span className="house__summaryline">
               {keyDisplay(keyId)} MAJOR · {clock(summary.durationMs)} · {summary.cues} CUES
@@ -561,7 +567,11 @@ export default function House({ keyId = tonightKey(), onExit, onSubmit }) {
               </tbody>
             </table>
             <p className="house__came">
-              {summary.cameBack === 0 ? 'NOTHING CAME BACK.' : `${summary.cameBack} CAME BACK.`}
+              {summary.complete
+                ? summary.cameBack === 0
+                  ? 'NOTHING CAME BACK.'
+                  : `${summary.cameBack} CAME BACK.`
+                : `${GOAL - summary.cleared} CHORDS SHORT.`}
             </p>
             <button type="button" className="house__again" onClick={start}>
               PLAY IT AGAIN
@@ -650,9 +660,9 @@ export default function House({ keyId = tonightKey(), onExit, onSubmit }) {
 
             {leaveAsk ? (
               <div className="house__confirm">
-                <span>LEAVE THIS RUN?</span>
+                <span>END THIS RUN?</span>
                 <button type="button" className="house__btn" onClick={leave}>
-                  LEAVE
+                  END &amp; BANK IT
                 </button>
                 <button type="button" className="house__btn" onClick={resumeRun}>
                   KEEP GOING
