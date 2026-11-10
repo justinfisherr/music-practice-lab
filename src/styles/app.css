@@ -341,6 +341,23 @@ select {
   }
 }
 
+/* A phone keeps four doors: FREE PLAY is the third and its route still renders
+   when deep-linked. display:none still counts for :nth-child, so LEDGER's
+   full-width span has to be reset. */
+@media (pointer: coarse) and (hover: none) {
+  .nav .door:nth-child(3) {
+    display: none;
+  }
+  .nav .door:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+@media (pointer: coarse) and (hover: none) and (min-width: 1024px) {
+  .nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 /* ---- Generic buttons ---- */
 .btn {
   padding: 12px 18px;
@@ -5639,14 +5656,13 @@ button.artistcard__hint:focus-visible {
   }
 }
 
-/* ---- Lit-key prototype: #test/falling. Throwaway surface. ---- */
-/* No falling notes: a cue lights keys in place and the lit window is the grade
-   window. The keyboard is pinned under the field in both orientations. */
-.arcade {
-  --arcade-bar: 52px;
-  --arcade-hud: 40px;
-  --cue-size: 56px;
-  --combo-size: 20px;
+/* ---- SEVENTH HOUSE: #session/game. The phone session. ---- */
+/* No falling notes. A chord station freezes the clock and the note stream; the
+   keyboard is pinned under the field in both orientations. */
+.house {
+  --house-bar: 52px;
+  --house-hud: 40px;
+  --house-name: clamp(38px, 12vw, 56px);
   --key-h: clamp(88px, 15vh, 124px);
   position: fixed;
   inset: 0;
@@ -5660,8 +5676,8 @@ button.artistcard__hint:focus-visible {
   color: var(--ink);
 }
 
-.arcade__bar {
-  flex: 0 0 var(--arcade-bar);
+.house__bar {
+  flex: 0 0 var(--house-bar);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -5672,15 +5688,11 @@ button.artistcard__hint:focus-visible {
   font-weight: 800;
   letter-spacing: 1px;
 }
-.arcade__key {
+.house__key {
+  margin-right: auto;
   white-space: nowrap;
 }
-.arcade__count-cues {
-  margin-left: auto;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-.arcade__btn {
+.house__btn {
   min-height: 44px;
   min-width: 44px;
   padding: 0 8px;
@@ -5695,11 +5707,13 @@ button.artistcard__hint:focus-visible {
   cursor: pointer;
 }
 
-.arcade__hud {
-  flex: 0 0 var(--arcade-hud);
-  display: flex;
+/* CHORDS n/14 — the pip strip — ACC. Score and streak are deliberately absent. */
+.house__hud {
+  flex: 0 0 var(--house-hud);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding: 0 8px;
   border-bottom: 3px solid var(--ink);
   background: var(--panel);
@@ -5707,38 +5721,45 @@ button.artistcard__hint:focus-visible {
   font-weight: 800;
   letter-spacing: 1px;
 }
-.arcade__stat {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.arcade__stat--right {
-  margin-left: auto;
-}
-.arcade__statlabel {
-  color: var(--muted);
-}
-.arcade__statval {
-  font-size: 15px;
+.house__count {
   font-variant-numeric: tabular-nums;
 }
-.arcade__mult {
-  font-size: 13px;
+.house__acc {
+  justify-self: end;
   font-variant-numeric: tabular-nums;
+}
+.house__pips {
+  display: grid;
+  grid-template-columns: repeat(7, 8px);
+  gap: 1px;
+  padding: 1px;
+  background: var(--line);
+  box-shadow: 0 0 0 3px var(--ink);
+}
+.house__pipcol {
+  display: grid;
+  grid-template-rows: repeat(2, 4px);
+  gap: 1px;
+}
+.house__pip {
+  background: var(--field);
+}
+.house__pip.is-on {
+  background: var(--ink);
 }
 
-.arcade__field {
+.house__field {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
-.arcade__field--summary {
+.house__field--summary {
   overflow-y: auto;
 }
 
-/* The middle holds two things: the grade word and NEXT. Nothing else. */
-.arcade__stage {
+/* The station: name, numeral, what he built. Nothing else on the field. */
+.house__station {
   position: absolute;
   inset: 0;
   display: flex;
@@ -5746,75 +5767,146 @@ button.artistcard__hint:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 12px;
+  padding: 14px 16px;
   text-align: center;
 }
-
-/* Opaque, above the keyboard, colour flip only — no motion. */
-.arcade__cue {
+.house__stationname,
+.house__stationbuild {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-height: calc(var(--cue-size) * 1.2);
-  padding: 4px 18px;
-  border: 3px solid transparent;
-  background: var(--bg);
+  gap: 10px;
+  width: 100%;
 }
-.arcade__cue.is-empty {
-  visibility: hidden;
+.house__eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--muted);
 }
-.arcade__cue--perfect,
-.arcade__cue--good,
-.arcade__cue--ok {
+.house__name {
+  font-size: var(--house-name);
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 0.95;
+}
+.house__rule {
+  width: min(240px, 64%);
+  border-top: 3px solid var(--ink);
+}
+.house__numeral {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: var(--muted);
+}
+.house__built {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 320px;
+}
+.house__builtlabel {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+.house__cells {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+  border: 3px solid var(--ink);
   background: var(--ink);
-  color: var(--bg);
 }
-.arcade__cue--miss,
-.arcade__cue--bomb,
-.arcade__cue--stray {
-  border-color: var(--signal);
+.house__slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.house__instruction {
+  max-width: 300px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* The verdict is a stamp, not a card, and colour flips only. */
+.house__verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.house__verdictstamp {
+  padding: 4px 14px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  line-height: 1;
+}
+.house__verdictstamp.is-clear {
+  border: 3px solid var(--ink);
+  color: var(--ink);
+}
+.house__verdictstamp.is-miss {
+  border: 3px solid var(--signal-ink);
   color: var(--signal-ink);
 }
-.arcade__cueword {
-  font-size: var(--cue-size);
+.house__verdictsub,
+.house__verdictback {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+
+/* The note stream's one word. */
+.house__stream {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.house__word {
+  min-height: 56px;
+  padding: 4px 18px;
+  border: 3px solid transparent;
+  font-size: clamp(28px, 9vw, 44px);
   font-weight: 800;
   letter-spacing: 2px;
   line-height: 0.95;
 }
-.arcade__combo {
-  font-size: var(--combo-size);
-  font-weight: 800;
-  letter-spacing: 2px;
-  line-height: 1;
+.house__word.is-empty {
+  visibility: hidden;
 }
-/* A hot streak grows a rule, not a new animation. */
-.arcade__cue.is-hot .arcade__combo {
-  padding-top: 3px;
-  border-top: 3px solid currentColor;
+.house__word--perfect,
+.house__word--good,
+.house__word--ok {
+  background: var(--ink);
+  color: var(--bg);
 }
-
-.arcade__next {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 8px;
-  min-width: 200px;
-  padding-top: 6px;
-  border-top: 3px solid var(--ink);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: var(--muted);
-}
-.arcade__nextlabel {
-  font-size: 10px;
-  letter-spacing: 2px;
+.house__word--miss,
+.house__word--stray {
+  border-color: var(--signal);
+  color: var(--signal-ink);
 }
 
-.arcade__ready,
-.arcade__count {
+.house__ready,
+.house__countover {
   position: absolute;
   inset: 0;
   z-index: 4;
@@ -5824,16 +5916,59 @@ button.artistcard__hint:focus-visible {
   padding: 16px;
   background: var(--bg);
 }
-.arcade__ready {
+.house__ready {
   justify-content: center;
 }
-.arcade__count {
+.house__countover {
   align-items: center;
   justify-content: center;
 }
+.house__countword {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 3px;
+}
 
-/* Pause freezes the field: the lit keys stay lit and only this block appears. */
-.arcade__confirm {
+.house__stamp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 3px solid var(--ink);
+  font-size: clamp(20px, 6vw, 26px);
+  font-weight: 800;
+  letter-spacing: 2px;
+  line-height: 1.1;
+}
+.house__stamp--ready {
+  font-size: clamp(22px, 7vw, 30px);
+}
+.house__readytitle {
+  font-size: clamp(18px, 5vw, 24px);
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 1.2;
+}
+
+.house__start,
+.house__again {
+  min-height: 48px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--signal);
+  color: var(--on-fill);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  cursor: pointer;
+}
+.house__again {
+  font-size: 19px;
+}
+
+/* Pause freezes the field: nothing is lit and only this block appears. */
+.house__confirm {
   position: absolute;
   left: 16px;
   right: 16px;
@@ -5853,104 +5988,94 @@ button.artistcard__hint:focus-visible {
   font-weight: 800;
   letter-spacing: 2px;
 }
-.arcade__confirm .arcade__btn {
+.house__confirm .house__btn {
   border-color: var(--ink);
   color: var(--ink);
 }
-.arcade__countword {
-  font-size: 44px;
-  font-weight: 800;
-  letter-spacing: 3px;
-}
-.arcade__eyebrow {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  color: var(--muted);
-}
-.arcade__readytitle {
-  font-size: clamp(20px, 6vw, 26px);
-  font-weight: 800;
-  letter-spacing: 1px;
-  line-height: 1.15;
-}
-.arcade__start,
-.arcade__again {
-  min-height: 48px;
-  border: 3px solid var(--ink);
-  border-radius: 0;
-  background: var(--signal);
-  color: var(--on-fill);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  cursor: pointer;
-}
 
-.arcade__summary {
+.house__summary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  max-width: 520px;
+  margin: 0 auto;
   padding: 18px 16px 24px;
 }
-.arcade__scorelabel {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  color: var(--muted);
-}
-.arcade__scorenum {
-  font-size: 56px;
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.arcade__best {
-  align-self: flex-start;
-  border: 3px solid var(--ink);
-  padding: 2px 8px;
+.house__summaryline {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 1.5px;
   color: var(--muted);
 }
-.arcade__best--new {
-  border-color: var(--signal);
-  color: var(--signal-ink);
-}
-.arcade__cells {
+.house__band {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
   border: 3px solid var(--ink);
   background: var(--ink);
 }
-.arcade__cell {
+.house__cell {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 8px;
   background: var(--bg);
 }
-.arcade__cellval {
+.house__cellval {
   font-size: 20px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-.arcade__celllabel {
+.house__celllabel {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 1px;
   color: var(--muted);
 }
-.arcade__say {
-  margin: 4px 0;
-  font-size: 12px;
+.house__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.house__table th,
+.house__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.house__table th {
+  border-bottom: 3px solid var(--ink);
+  color: var(--muted);
+  font-size: 9px;
   font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.house__table td:nth-child(2) {
+  color: var(--muted);
   letter-spacing: 1px;
 }
-.arcade__desk {
+.house__table th:last-child,
+.house__table td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.house__table .is-back {
+  color: var(--signal-ink);
+}
+.house__came {
+  margin: 2px 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.house__outcome {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+.house__desk {
   align-self: flex-start;
   min-height: 44px;
   padding: 0;
@@ -5965,7 +6090,7 @@ button.artistcard__hint:focus-visible {
   cursor: pointer;
 }
 
-.arcade__live {
+.house__live {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -5973,6 +6098,73 @@ button.artistcard__hint:focus-visible {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* ---- The phone desk: three steps, no graded preview ---- */
+/* Under 768px .desk__wheel is display:contents, so TONIGHT, START and the wheel
+   become siblings of the mission. START sits above the wheel; the house plan
+   comes after the plan chip. */
+.desk--house .desk__start {
+  order: 2;
+}
+.desk--house .wheel {
+  order: 3;
+}
+.desk--house .desk__main {
+  order: 4;
+}
+.desk--house .desk__rail {
+  order: 5;
+}
+.desk--house .mission__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.desk--house .mission__top .planchip {
+  margin-bottom: 0;
+}
+.desk__start {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.desk__start .btn {
+  width: 100%;
+}
+.houseplan {
+  order: 2;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 3px solid var(--line);
+}
+.houseplan__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 2px solid var(--line);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.houseplan__num {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+/* Desktop only: the game is a phone session. */
+.queuebar__house {
+  display: none;
+}
+@media (min-width: 768px) {
+  .queuebar__house {
+    display: inline;
+  }
 }
 
 /* ---- The keyboard: one octave, pinned to the bottom. ---- */
@@ -6057,17 +6249,37 @@ button.artistcard__hint:focus-visible {
   color: var(--bg);
 }
 
-/* Chord: the border says chord, the fill stays readable. */
-.piano__white.is-chord,
-.piano__black.is-chord {
-  background: var(--panel);
-  color: var(--ink);
-  box-shadow: inset 0 0 0 3px var(--signal);
-}
-
 /* Bomb: ink fill with a signal border. Never signal behind text. */
 .piano__white.is-bomb,
 .piano__black.is-bomb {
+  box-shadow: inset 0 0 0 3px var(--signal);
+}
+
+/* The station dims the keyboard: same geometry, colour only. */
+.piano.is-dim .piano__white {
+  background: var(--field);
+  color: var(--muted);
+}
+.piano.is-dim .piano__black {
+  background: var(--muted);
+  color: var(--bg);
+}
+.piano .piano__white.is-picked,
+.piano .piano__black.is-picked {
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: none;
+}
+.piano .piano__white.is-good,
+.piano .piano__black.is-good {
+  background: var(--ok-ink);
+  color: var(--on-fill);
+  box-shadow: none;
+}
+.piano .piano__white.is-bad,
+.piano .piano__black.is-bad {
+  background: var(--field);
+  color: var(--muted);
   box-shadow: inset 0 0 0 3px var(--signal);
 }
 
@@ -6092,63 +6304,31 @@ button.artistcard__hint:focus-visible {
   cursor: default;
 }
 
-/* The chord break: a full-bleed inverted block, cut in with no motion. */
-.arcade__break {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px;
-  background: var(--ink);
-  color: var(--bg);
-  text-align: center;
-}
-.arcade__breakname {
-  font-size: var(--cue-size);
-  font-weight: 800;
-  letter-spacing: 1px;
-  line-height: 1;
-}
-.arcade__breakrule {
-  width: min(240px, 64%);
-  border-top: 3px solid var(--bg);
-}
-.arcade__breaknum {
-  font-size: var(--combo-size);
-  font-weight: 800;
-  letter-spacing: 3px;
-  color: var(--muted-on-ink);
-}
-.arcade__breaknotes {
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 4px;
-  color: var(--muted-on-ink);
-}
-.arcade__breakclear {
-  font-size: var(--combo-size);
-  font-weight: 800;
-  letter-spacing: 4px;
-}
-
-/* Landscape is a real layout: shorter chrome, a bigger word, a shorter key. */
+/* Landscape is a real layout: shorter chrome, the station in two columns. */
 @media (orientation: landscape) and (max-height: 500px) {
-  .arcade {
-    --arcade-bar: 44px;
-    --arcade-hud: 32px;
-    --cue-size: 72px;
+  .house {
+    --house-bar: 44px;
+    --house-hud: 32px;
+    --house-name: 36px;
     --key-h: 96px;
   }
-  .arcade__ready {
+  .house__station {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 16px;
+    text-align: left;
+  }
+  .house__stationname,
+  .house__stationbuild {
+    align-items: flex-start;
+  }
+  .house__ready {
     gap: 6px;
     padding: 10px 16px;
   }
-  .arcade__summary {
-    gap: 4px;
+  .house__summary {
+    gap: 6px;
     padding: 8px 16px 12px;
   }
 }

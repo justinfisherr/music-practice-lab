@@ -35,6 +35,7 @@ const MODULE_ID_SET = new Set(MODULE_IDS)
 const CARD_STAGE_ID_SET = new Set([...CARD_STAGE_IDS, ...LEGACY_STAGE_IDS])
 const STAGE_IDS = new Set(['warmup', 'ear', 'hook', 'jam', ...MODULE_IDS, ...CARD_STAGE_ID_SET])
 const SCOPES = new Set(['session', 'lesson', 'open'])
+const KINDS = new Set(['graded', 'manual', 'arcade'])
 const MAX_BODY = 32 * 1024
 const MAX_PAYLOAD = 16 * 1024
 const MAX_DURATION = 4 * 60 * 60 * 1000
@@ -114,11 +115,18 @@ export async function ensure() {
       )
       await pool.query(`DO $$
         BEGIN
+          PERFORM pg_advisory_xact_lock(20261109);
           IF NOT EXISTS (
-            SELECT 1 FROM pg_constraint WHERE conname = 'practice_sessions_kind_check'
+            SELECT 1 FROM pg_constraint
+             WHERE conname = 'practice_sessions_kind_check'
+               AND conrelid = 'practice.sessions'::regclass
+               AND pg_get_constraintdef(oid) LIKE '%arcade%'
           ) THEN
             ALTER TABLE practice.sessions
-              ADD CONSTRAINT practice_sessions_kind_check CHECK (kind IN ('graded','manual')) NOT VALID;
+              DROP CONSTRAINT IF EXISTS practice_sessions_kind_check;
+            ALTER TABLE practice.sessions
+              ADD CONSTRAINT practice_sessions_kind_check
+              CHECK (kind IN ('graded','manual','arcade')) NOT VALID;
           END IF;
         END $$`)
       await pool.query('ALTER TABLE practice.sessions VALIDATE CONSTRAINT practice_sessions_kind_check')
@@ -224,6 +232,66 @@ function intBetween(value, min, max) {
   return Number.isInteger(value) && value >= min && value <= max
 }
 
+// SEVENTH HOUSE's payload is its own contract: the run is client-side and the
+// row's chord counts come from `chords`, so a graded row can never pass here.
+function validateArcade(input, sessionDate, scope) {
+  const payload = input.payload
+  if (payload.version !== 5) throw invalid()
+  if (payload.source !== 'arcade') throw invalid()
+  if (payload.mode !== 'seventh-house') throw invalid()
+  if (!KEY_IDS.has(payload.keyId) || payload.keyId !== input.keyId) throw invalid()
+  if (!Number.isInteger(payload.seed) || payload.seed !== input.seed) throw invalid()
+  if (payload.goal !== 14) throw invalid()
+  if (!intBetween(payload.cleared, 0, 14)) throw invalid()
+  if (typeof payload.complete !== 'boolean' || payload.complete !== (payload.cleared === 14)) {
+    throw invalid()
+  }
+  if (!intBetween(payload.accuracy, 0, 100)) throw invalid()
+  if (!payload.cues || typeof payload.cues !== 'object' || Array.isArray(payload.cues)) {
+    throw invalid()
+  }
+  for (const value of Object.values(payload.cues)) {
+    if (!Number.isInteger(value) || value < 0) throw invalid()
+  }
+  if (!payload.chords || typeof payload.chords !== 'object' || Array.isArray(payload.chords)) {
+    throw invalid()
+  }
+  if (Object.keys(payload.chords).length !== 7) throw invalid()
+
+  const chords = {}
+  let attempts = 0
+  let misses = 0
+  for (let degree = 1; degree <= 7; degree++) {
+    const entry = payload.chords[degree]
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw invalid()
+    if (!intBetween(entry.correct, 0, 2)) throw invalid()
+    if (!Number.isInteger(entry.missed) || entry.missed < 0 || entry.missed > 999) throw invalid()
+    chords[degree] = { correct: entry.correct, missed: entry.missed }
+    attempts += entry.correct + entry.missed
+    misses += entry.missed
+  }
+
+  const elapsed = Date.parse(input.endedAt) - Date.parse(input.startedAt)
+  const durationMs = Math.min(
+    MAX_DURATION,
+    Math.max(0, intBetween(input.durationMs, 0, MAX_DURATION) ? input.durationMs : elapsed),
+  )
+
+  return {
+    ...input,
+    kind: 'arcade',
+    scope,
+    sessionDate,
+    attempts,
+    misses,
+    passedStages: 0,
+    durationMs,
+    moduleCount: 0,
+    moduleTypes: [],
+    payload: { ...payload, chords },
+  }
+}
+
 export function validate(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid()
   if (typeof input.id !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(input.id)) throw invalid()
@@ -233,7 +301,7 @@ export function validate(input) {
   if (!Number.isInteger(input.seed)) throw invalid()
   if (input.status !== 'done' && input.status !== 'abandoned') throw invalid()
   const kind = input.kind ?? 'graded'
-  if (kind !== 'graded' && kind !== 'manual') throw invalid()
+  if (!KINDS.has(kind)) throw invalid()
   if (!isoTime(input.startedAt) || !isoTime(input.endedAt)) throw invalid()
   const start = Date.parse(input.startedAt)
   const end = Date.parse(input.endedAt)
@@ -273,6 +341,7 @@ export function validate(input) {
   const scope = input.payload.scope ?? (kind === 'manual' ? 'open' : 'session')
   if (!SCOPES.has(scope)) throw invalid()
   if (Buffer.byteLength(JSON.stringify(input.payload)) > MAX_PAYLOAD) throw tooLarge()
+  if (kind === 'arcade') return validateArcade(input, sessionDate, scope)
 
   const attempts = input.stages.reduce((sum, stage) => sum + stage.attempts, 0)
   const misses = input.stages.reduce((sum, stage) => sum + stage.misses, 0)
@@ -327,6 +396,7 @@ function summary(row) {
     misses: row.misses,
     passedStages: row.passed_stages,
     moduleCount: row.module_count ?? 0,
+    accuracy: row.accuracy == null ? null : Number(row.accuracy),
     moduleTypes: Array.isArray(row.module_types)
       ? row.module_types.map((module) => module?.type).filter((type) => typeof type === 'string')
       : [],
@@ -359,6 +429,7 @@ export default async function handler(req, res) {
           `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                   ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
                   module_count, payload->>'focus' AS focus, payload->>'scope' AS scope,
+                  payload->>'accuracy' AS accuracy,
                   COALESCE(payload#>'{composition,modules}', payload#>'{composition,stages}') AS module_types, payload
              FROM practice.sessions WHERE id = $1`,
           [String(id)],
@@ -391,6 +462,7 @@ export default async function handler(req, res) {
         `SELECT id, session_date::text AS date, key_id, seed, status, started_at,
                 ended_at, duration_ms, attempts, misses, passed_stages, xp, kind,
                 module_count, payload->>'focus' AS focus, payload->>'scope' AS scope,
+                payload->>'accuracy' AS accuracy,
                 COALESCE(payload#>'{composition,modules}', payload#>'{composition,stages}') AS module_types
            FROM practice.sessions
           ${where.length ? `WHERE ${where.join(' AND ')}` : ''}

@@ -1,5 +1,5 @@
 export const VIEWS = ['session', 'lessons', 'freeplay', 'crate', 'stats']
-export const SESSION_SUBS = ['run', 'summary']
+export const SESSION_SUBS = ['run', 'summary', 'game']
 
 export function parseHash(hash = typeof window === 'undefined' ? '' : window.location.hash) {
   const raw = String(hash || '').replace(/^#/, '')
@@ -30,11 +30,11 @@ export function parseHash(hash = typeof window === 'undefined' ? '' : window.loc
 
   if (parts[0] === 'session') {
     const sub = SESSION_SUBS.includes(parts[1]) ? parts[1] : null
-    return { view: 'session', sub }
+    return { view: 'session', sub, key: query.get('key') || null }
   }
 
   if (parts[0] === 'test') {
-    // Hidden prototype pages: #test/falling. Never in ROUTES, never in the nav.
+    // `#test/falling` is a read-only alias for SEVENTH HOUSE. Never in ROUTES.
     return { view: 'test', sub: parts[1] || null }
   }
 

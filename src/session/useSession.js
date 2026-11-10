@@ -475,6 +475,18 @@ export function useSession() {
   const finish = useCallback(() => finalize('done'), [finalize])
   const abandon = useCallback(() => finalize('abandoned'), [finalize])
 
+  // Runs that are not the graded session still use the one queue, so offline
+  // and dead-letter behaviour is identical.
+  const submitRun = useCallback(
+    (run) => {
+      if (!run?.id) return
+      store.enqueueRun(run)
+      setSync((prev) => ({ ...prev, pending: store.loadQueue().length }))
+      flushQueue()
+    },
+    [flushQueue],
+  )
+
   const reset = useCallback(() => {
     commit(null)
   }, [commit])
@@ -508,6 +520,7 @@ export function useSession() {
     goToStage,
     finish,
     abandon,
+    submitRun,
     reset,
     pause,
     resume,

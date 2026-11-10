@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMidiContext } from '../hooks/MidiContext.jsx'
 import { useTouchInput } from '../hooks/useTouchInput.js'
+import { isPhone } from '../session/device.js'
 import { keyDisplay } from '../data/scales.js'
 import Wheel from './Wheel.jsx'
+import { HouseMark } from './House.jsx'
 import { loadBonus } from '../session/wheel.js'
 import { daysSinceEpoch, laDate, lastSevenRuns, seedFor, tonightKey } from '../session/tonight.js'
 import { getRuns } from '../session/api.js'
@@ -16,6 +18,7 @@ import * as store from '../session/store.js'
 const MANUAL_FOCUS = ['FREE PLAY', 'LESSONS', 'DRILLS', 'LISTENING']
 
 function runLabel(run) {
+  if (run.kind === 'arcade') return `SEVENTH HOUSE · ${keyDisplay(run.keyId)}`
   if (run.scope === 'lesson') return 'LESSON'
   if (run.kind === 'manual') return run.focus || 'OPEN'
   return `${keyDisplay(run.keyId)} MAJOR`
@@ -37,6 +40,9 @@ export default function SessionTab({
 }) {
   const midi = useMidiContext()
   const { touch } = useTouchInput()
+  // A phone (coarse pointer, no hover) opens SEVENTH HOUSE; every other device
+  // keeps the graded set. Decided at click time, never at render.
+  const phone = isPhone()
   const date = laDate()
   const tonight = tonightKey(date)
   const [variant, setVariant] = useState('tonight')
@@ -92,7 +98,8 @@ export default function SessionTab({
   const week = lastSevenRuns(runs, date)
   const minutes = Math.round(week.reduce((sum, run) => sum + (run.durationMs || 0), 0) / 60000)
   const modules = week.reduce(
-    (sum, run) => sum + (run.kind === 'manual' ? 0 : run.moduleCount || 3),
+    (sum, run) =>
+      sum + (run.kind === 'manual' || run.kind === 'arcade' ? 0 : run.moduleCount || 3),
     0,
   )
   const passed = week.reduce((sum, run) => sum + (run.passedStages || 0), 0)
@@ -146,7 +153,7 @@ export default function SessionTab({
       <button
         type="button"
         className="btn btn--huge btn--signal"
-        onClick={() => startSet()}
+        onClick={() => (isPhone() ? onOpenArcade(keyId) : startSet())}
       >
         START {variant === 'bonus' ? 'BONUS' : 'TODAY'}
       </button>
@@ -155,7 +162,7 @@ export default function SessionTab({
 
   return (
     <section className="session" aria-labelledby="tonight-title">
-      <div className="desk">
+      <div className={`desk${phone ? ' desk--house' : ''}`}>
         <aside className="desk__wheel">
           <div className="tonight">
             <p className="tonight__kicker">TODAY · {date} · LOS ANGELES</p>
@@ -167,6 +174,8 @@ export default function SessionTab({
               SEED {seed}
             </p>
           </div>
+
+          {phone ? <div className="desk__start">{action}</div> : null}
 
           <Wheel
             date={date}
@@ -194,52 +203,74 @@ export default function SessionTab({
           <div className="mission">
             <div className="mission__top">
               <p className="planchip planchip--ready">
-                {variant === 'bonus' ? 'BONUS' : 'TODAY'} · THE SET
+                {phone
+                  ? `${variant === 'bonus' ? 'BONUS' : 'TONIGHT'} · SEVENTH HOUSE`
+                  : `${variant === 'bonus' ? 'BONUS' : 'TODAY'} · THE SET`}
               </p>
+              {phone ? <HouseMark size={20} /> : null}
             </div>
 
-            <div className="whymodules">
-              <span className="whymodules__label">WHY THE SET</span>
-              <p className="whymodules__copy">
-                Warm up in three homes, then comp a 30-second changes round. The round scores
-                the chord at each change and pays for close voice leading. The backing keeps
-                looping after the bell so you can keep practicing.
-              </p>
-            </div>
+            {phone ? null : (
+              <div className="whymodules">
+                <span className="whymodules__label">WHY THE SET</span>
+                <p className="whymodules__copy">
+                  Warm up in three homes, then comp a 30-second changes round. The round scores
+                  the chord at each change and pays for close voice leading. The backing keeps
+                  looping after the bell so you can keep practicing.
+                </p>
+              </div>
+            )}
 
-            <ol className="stagepreview" aria-label="The set">
-              <li className="stagepreview__row">
-                <span className="stagepreview__num">01</span>
-                <span>
-                  <span className="stagepreview__type">WARM-UP</span>
-                  <span className="stagepreview__title">SCALE LAB · EAR · CHORDS · TURNAROUND</span>
-                  <span className="stagepreview__copy">
-                    Three homes on one keyboard — major, relative minor, blues — then four
-                    notes by ear, six seventh chords in order, and a I–vi–ii–V turnaround. Slow is
-                    fine.
+            {phone ? (
+              <ol className="houseplan" aria-label="Seventh House">
+                <li className="houseplan__row">
+                  <span className="houseplan__num">01</span>
+                  <span>SEVEN CHORDS · BUILT FROM THE NAME</span>
+                </li>
+                <li className="houseplan__row">
+                  <span className="houseplan__num">02</span>
+                  <span>SINGLE NOTES BETWEEN</span>
+                </li>
+                <li className="houseplan__row">
+                  <span className="houseplan__num">03</span>
+                  <span>TWICE EACH · 14 CLEAR</span>
+                </li>
+              </ol>
+            ) : (
+              <ol className="stagepreview" aria-label="The set">
+                <li className="stagepreview__row">
+                  <span className="stagepreview__num">01</span>
+                  <span>
+                    <span className="stagepreview__type">WARM-UP</span>
+                    <span className="stagepreview__title">SCALE LAB · EAR · CHORDS · TURNAROUND</span>
+                    <span className="stagepreview__copy">
+                      Three homes on one keyboard — major, relative minor, blues — then four
+                      notes by ear, six seventh chords in order, and a I–vi–ii–V turnaround. Slow is
+                      fine.
+                    </span>
                   </span>
-                </span>
-                <span className="stagepreview__tag">T2 · SET</span>
-              </li>
-              <li className="stagepreview__row">
-                <span className="stagepreview__num">02</span>
-                <span>
-                  <span className="stagepreview__type">CHANGES</span>
-                  <span className="stagepreview__title">30 SECONDS · PLAY THE CHANGES</span>
-                  <span className="stagepreview__copy">
-                    Comp over the looping changes. The chord at each change scores; close
-                    voicings pay a voice-leading bonus. After 30 seconds the backing keeps
-                    going for practice.
+                  <span className="stagepreview__tag">T2 · SET</span>
+                </li>
+                <li className="stagepreview__row">
+                  <span className="stagepreview__num">02</span>
+                  <span>
+                    <span className="stagepreview__type">CHANGES</span>
+                    <span className="stagepreview__title">30 SECONDS · PLAY THE CHANGES</span>
+                    <span className="stagepreview__copy">
+                      Comp over the looping changes. The chord at each change scores; close
+                      voicings pay a voice-leading bonus. After 30 seconds the backing keeps
+                      going for practice.
+                    </span>
+                    <FoundationLink id="play-the-changes" />
                   </span>
-                  <FoundationLink id="play-the-changes" />
-                </span>
-                <span className="stagepreview__tag">T3 · CHANGES</span>
-              </li>
-            </ol>
+                  <span className="stagepreview__tag">T3 · CHANGES</span>
+                </li>
+              </ol>
+            )}
 
             <div className="mission__actions">
-              {action}
-              {!sessionActive && midi.supported && midi.connected ? (
+              {phone ? null : action}
+              {!phone && !sessionActive && midi.supported && midi.connected ? (
                 <button
                   type="button"
                   className="linkbtn"
@@ -255,7 +286,7 @@ export default function SessionTab({
               ) : null}
             </div>
 
-            {touch ? (
+            {!phone && touch ? (
               <p className="mission__gate">
                 No keyboard needed. The pad plays every graded stage except CHANGES.
                 <span className="mission__gate-sub">A keyboard is faster if you have one.</span>
@@ -270,13 +301,13 @@ export default function SessionTab({
                   </button>
                 ) : null}
               </p>
-            ) : !midi.connected ? (
+            ) : !phone && !midi.connected ? (
               <p className="mission__gate">
                 No keyboard detected yet. Use the CONNECT control above, then start.
               </p>
             ) : null}
 
-            {touch ? (
+            {phone || touch ? (
               <p className="inputchip">INPUT · TOUCH</p>
             ) : midi.supported && midi.status === 'ready' ? (
               <div className="mission__midi">
@@ -402,11 +433,12 @@ export default function SessionTab({
 
       <div className="queuebar">
         <span>{runs.length} SESSIONS IN THE LEDGER</span>
+        <span className="queuebar__house">SEVENTH HOUSE IS A PHONE SESSION.</span>
         <button type="button" className="linkbtn" onClick={onOpenLedger}>
           OPEN LEDGER
         </button>
-        <button type="button" className="linkbtn" onClick={onOpenArcade}>
-          ARCADE (TEST)
+        <button type="button" className="linkbtn" onClick={() => onOpenArcade(keyId)}>
+          SEVENTH HOUSE
         </button>
       </div>
     </section>

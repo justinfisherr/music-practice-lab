@@ -65,7 +65,7 @@ The first block on the Practice tab is a single dark-outlined paper card: `DAILY
 
 ## Session & Ledger
 
-The SESSION tab opens on an ink block: the LA-local date, the key of the night from the circle of fifths, its key number, and the deterministic seed. Graded stages run on a MIDI keyboard where there is one and on the touch pad everywhere else; a browser without Web MIDI gets the pad instead of a dead START button. The run has a sticky ink bar with the key, a tabular timer, SOUND, and an inline LEAVE confirm. Warm-up is a scale strip, a seven-step progress spine, and three-note chord prompts. Ear check shows four note cells and grades order. The HOOK is the one inverted surface: a two-bar grid, six notes, and solid/slashed/dashed diff marks on paper cells.
+The SESSION tab opens on an ink block: the LA-local date, the key of the night from the circle of fifths, its key number, and the deterministic seed. Graded stages run on a MIDI keyboard where there is one and on the touch pad everywhere else; a browser without Web MIDI gets the pad instead of a dead START button. On a touch-only phone this whole run is replaced by SEVENTH HOUSE. The run has a sticky ink bar with the key, a tabular timer, SOUND, and an inline LEAVE confirm. Warm-up is a scale strip, a seven-step progress spine, and three-note chord prompts. Ear check shows four note cells and grades order. The HOOK is the one inverted surface: a two-bar grid, six notes, and solid/slashed/dashed diff marks on paper cells.
 
 The LEDGER is a paper surface with four block meters, a 12-cell key heat grid in circle-of-fifths order, key filter chips drawn only from keys that have runs, and clickable rows. Detail is the same ledger vocabulary plus a back control, a stage table, and the hook notes. No nested cards: rows and cells are ruled, not boxed inside boxes.
 
@@ -76,7 +76,7 @@ The LEDGER is a paper surface with four block meters, a 12-cell key heat grid in
 
 ## Rank & XP
 
-Each finished session earns XP on the server (`practice.sessions.xp`): warm-up 10 (+5 first try), ear 20 (+10), hook 35 (+15), plus 15 for finishing. v3 modules pay tier 1/2/3 = 10/15/20, plus 5 for a first-try clear, plus 15 completion XP on session-scope runs. The first occurrence of each stage counts, only passed stages count, and the total clamps to 1000 per session. `meta.totalXp` is the global sum across every session, and it is the single number the client trusts.
+Each finished session earns XP on the server (`practice.sessions.xp`): warm-up 10 (+5 first try), ear 20 (+10), hook 35 (+15), plus 15 for finishing. v3 modules pay tier 1/2/3 = 10/15/20, plus 5 for a first-try clear, plus 15 completion XP on session-scope runs. SEVENTH HOUSE pays a flat 35 for a completed house and 0 for an abandoned one. The first occurrence of each stage counts, only passed stages count, and the total clamps to 1000 per session. `meta.totalXp` is the global sum across every session, and it is the single number the client trusts.
 
 The rank ladder is `L1 0 · L2 120 · L3 300 · L4 560 · L5 900 · L6 1320 · L7 1840 · L8 2460 · L9 3180 · L10 4000`, with titles OPENING ACT (L1-2), SIDE PLAYER (L3-4), SESSION PLAYER (L5-6), HEADLINER (L7-8), BANDLEADER (L9-10). `RankLine` sits inside the ink TONIGHT block; `XpBand` is a hard-ruled floor-to-next bar with tabular numbers; `RankCard` heads the Ledger; `LevelUpBlock` appears on the summary only when the session crossed a level.
 
@@ -107,9 +107,11 @@ The LESSONS tab is ten cards derived from the module catalog: tier stamp, title,
 
 ## Desk and rail
 
-The SESSION desk is a 12-column grid from 1024px. At 1280px and up it is wheel 6 / mission 4 / slim rail 2, capped at 1320px with 20px gutters; the wheel stage is 400-480px (440px max). From 1024-1279px it is wheel 7 / mission 5, with the rail becoming a full-width three-cell band under both. The mission column holds the plan chip, WHY THESE MODULES, the module list with teach lines, START, the MIDI row, and a manual-session disclosure. The rail holds the compact rank line and XP band, six wardrobe swatches that open the ledger wardrobe, the last three sessions, and the 7-night numbers. Mobile stays a single column.
+The SESSION desk is a 12-column grid from 1024px. At 1280px and up it is wheel 6 / mission 4 / slim rail 2, capped at 1320px with 20px gutters; the wheel stage is 400-480px (440px max). From 1024-1279px it is wheel 7 / mission 5, with the rail becoming a full-width three-cell band under both. The mission column holds the plan chip, WHY THESE MODULES, the module list with teach lines, START, the MIDI row, and a manual-session disclosure. The rail holds the compact rank line and XP band, six wardrobe swatches that open the ledger wardrobe, the last three sessions, and the 7-night numbers.
 
 The run is a 340px module rail plus the active module panel from 1024px. The rail lists number, type, teach line, and PASSED / UP NEXT / OPEN; a passed module opens a read-only review. The sticky session bar spans the top, the rail scrolls inside its own column, and the active panel is keyed by module so the page does not jump. The ledger is 8 columns of meters, filters, and rows plus a 4-column side of rank/wardrobe, a 4x3 key heat grid, and 7-night stats. Detail stays a single column.
+
+Mobile stays a single column. On touch, the desk order is TONIGHT, START, wheel, house plan, then the open-session disclosure and rail — see SEVENTH HOUSE.
 
 ## Wheel and teach tokens
 
@@ -132,6 +134,42 @@ Input is auto-selected: pad when `!midi.connected` and the device is coarse-poin
 Tokens: `--pad-key-h: 56px` (48px under a 700px viewport height), `--pad-gap: 6px`, `--pad-h` computed from them, `--safe-b: env(safe-area-inset-bottom, 0px)`. No new colours: every state resolves from existing skin tokens, so PAPER through REEL stay legible.
 
 Mobile run layout, under 768px: `TOUCH PAD` only in a run, single column, page scrolls above it. The masthead and nav doors are hidden for the duration of a run and LEAVE is the one exit; that returns about 270px of vertical budget. The session bar collapses to one 52px row (key, tabular timer, PAUSE, SOUND, LEAVE) and the run rail becomes a horizontal strip of 44px stage cells, ink-filled when current, green-ruled when passed. The stage card is a flex column below 768px and its reading order is forced to the order of the action: head, ask, verdict, lists, controls. At a 300px stage window the head, the chord prompt and the verdict still fit.
+
+## SEVENTH HOUSE — the phone session
+
+On a touch-only device, `START TODAY` opens SEVENTH HOUSE instead of the graded set: the seven diatonic sevenths of the wheel's key, each built correctly twice, 14 chords to close the run. The key comes from the desk selection (tonight or bonus) and there is no key chooser inside the run — the bar states the key as plain text, `D MAJOR`, 11px on the ink bar, and every station's numeral is read in it.
+
+The name is a stamp: `SEVENTH HOUSE` in ink, tracked 2px, 3px rule above, with a mark — a 3px chevron roof over seven 3px columns of two cells, `currentColor`, `aria-hidden`. The mark is the progress strip; it appears at 20px beside the desk plan chip and 34px on the ready and summary stamps.
+
+**Station.** The station is the heart of the game and it freezes everything: the clock, the timed stream, every grade word. Between the HUD and the keyboard, on paper: eyebrow `CHORD n / 14`; the chord name (`Dm7`) at `--house-name`; a 3px rule at 64% width; the numeral (`ii7`) at 20px, tracked 3px, in `--muted`; a four-cell `--field` readout of the notes he has tapped; one instruction line. The keyboard dims to `--field` whites with `--muted` labels and `--muted` blacks — geometry, 3px rules and 44px targets never change, only colour.
+
+A tap fills the key to `--ink` with a `--bg` label and appends the spelled note to the readout; tapping a lit key removes it, so four selected keys are always four distinct pitch classes and a duplicate is impossible. The instruction ticks down: `TAP FOUR NOTES`, `THREE MORE`, `TWO MORE`, `ONE MORE · TAP A LIT KEY TO UNDO`. Order is not graded; the set of four is.
+
+- **Right:** the four flip to `--ok-ink` with `--on-fill` labels (6.64:1 floor across all six skins), a `CLEAR` ink stamp lands under the name with `{numeral} · 1 OF 2`, the pip fills and `CHORDS` ticks. 650ms, then the queue moves.
+- **Wrong:** input locks. The correct four fill `--ok-ink`; his wrong picks stay `--field` under a 3px `--signal` ring (4.32:1 floor). The stamp reads `MISS · {numeral} COMES BACK` in `--signal-ink`. The pip loses its most recent fill. 900ms, then the queue moves. A station is never retried in place — the type returns later in the queue.
+- Audio: a tap sounds its note; the verdict sounds the whole chord once. The station never plays the answer before it is graded.
+
+Every state is a colour flip at `--t-stamp`. Nothing moves, so reduced motion changes nothing.
+
+**Progress.** The HUD is one 40px row: `CHORDS n/14`, the pip strip, `ACC n%`. Score, the ×N multiplier and the streak counter are cut: a run with a fixed end measures itself in chords, and accuracy is the honest quality number. The bar carries the key, SOUND and BACK — no timer, because the run has no clock.
+
+The pip strip is a 7-column × 2-row ruled grid: column is the degree I..vii in diatonic order, the bottom cell is the first clear, the top cell the second. Earned cells are `--ink`, owed cells `--field` behind a 1px `--line` grid inside a 3px `--ink` frame. A miss un-fills the most recent cell, so the strip always shows exactly what is still owed — `CHORDS 3/14` for the count, the strip for the shape.
+
+**Summary.** `HOUSE BUILT` stamp with the mark, then three cells — TIME `mm:ss`, CUES, ACC — then the seven-row table: chord name, numeral, `HITS/TRIES`, ruled not boxed. `2/2` is ink; any row that took more tries than hits is `--signal-ink`. The table is the point of the screen: it says which chord came back. Closing line: `NOTHING CAME BACK.` or `{n} CAME BACK.` `PLAY IT AGAIN` is the signal fill with a 19px/800 label (AA large text, 4.32:1 floor), and `BACK TO DESK` is an underlined ink control.
+
+**Shell.** The shell switches on `data-input="touch"` (from `useTouchInput().touch`), never on width — an iPad is a phone here and a narrow desktop is not.
+
+- Nav is four doors, 2×2: SESSION, LESSONS, CRATE, LEDGER. The FREE PLAY door is hidden on touch only; the route still renders when deep-linked. The existing odd-last-door rule must not misfire — `display: none` still counts for `:nth-child`, so the LEDGER door needs its span reset.
+- Desk order on touch: TONIGHT block, START (full width), wheel, house plan, open-session disclosure, rail. START sits above the wheel so the one action is on the first screen; the wheel is the key adjuster under it.
+- Removed on touch: the MIDI gate copy, `USE A KEYBOARD INSTEAD`, `CLASSIC SESSION`, the MIDI input select, `WHY THE SET` and the two-stage preview. Kept: the plan chip, `INPUT · TOUCH` as a read-only chip, the open-session disclosure.
+- The graded stage preview is replaced by a three-row house plan: `01 SEVEN CHORDS · BUILT FROM THE NAME`, `02 SINGLE NOTES BETWEEN`, `03 TWICE EACH · 14 CLEAR`.
+- The game covers the chrome: the `app--run` class plus a fixed inset-0 layer, as the prototype already does.
+
+**Desktop.** The graded set is untouched, and SEVENTH HOUSE gets no door of its own: `#session/game` exists and the queuebar carries one static line, `SEVENTH HOUSE IS A PHONE SESSION.`, above 767px only.
+
+**Contrast floor.** Bar `--bg` on `--ink` 12.64:1; station name `--ink` on `--bg` 12.64:1; numeral and dim labels `--muted` on `--bg` 4.78:1 and on `--field` 5.45:1; selected keys `--bg` on `--ink` 12.64:1; right answer `--on-fill` on `--ok-ink` 6.64:1; miss text `--signal-ink` on `--bg` 5.78:1; signal ring on field 4.32:1 and pips `--ink` on `--field` 15.51:1 as graphics. Nothing introduces a new pairing.
+
+**Landscape and short screens.** Under `(orientation: landscape) and (max-height: 500px)`: bar 44, HUD 32, keys 96, name 36px, and the station goes two columns — name block left, readout and instruction right. At 375×667 the bar, HUD and 88px keyboard leave 495px for the field; the station needs 190.
 
 ## Crate
 

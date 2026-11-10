@@ -1,229 +1,237 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  BREAK_MS,
-  GRACE_MS,
-  PERFECT_MS,
-  RUN_CUES,
-  breakSweep,
-  buildRun,
+  CAP_CUES,
+  GOAL,
+  NOTE_GAP,
+  buildQueue,
+  createRun,
   gradeTiming,
-  holdFor,
+  hashSeed,
   intervalFor,
-  multiplierFor,
-  pointsFor,
-  startBreak,
-  windowFor,
+  nextCue,
+  resolveStation,
+  runAccuracy,
+  stationChord,
+  toArcadeRow,
 } from './arcade.js'
 import { diatonicSevenths, keyById } from '../data/scales.js'
+import { validate } from '../../api/sessions.js'
+
+const SEEDS = [1, 7, 99, 12345]
+const KEYS = ['C', 'Gb', 'A', 'Eb']
 
 const keyPcs = (keyId) => {
   const key = keyById(keyId)
   return [0, 2, 4, 5, 7, 9, 11].map((step) => (key.tonic + step) % 12)
 }
 
-const SEEDS = [1, 7, 99, 12345]
-const KEYS = ['C', 'Gb', 'A', 'Eb']
+// nextCue hands out one event at a time; `answer` decides every station.
+function play({ keyId = 'C', seed = 1, answer = () => true } = {}) {
+  const run = createRun({ keyId, seed })
+  const stations = []
+  const kinds = []
+  for (let guard = 0; guard < 1000; guard++) {
+    const cue = nextCue(run)
+    if (!cue) break
+    kinds.push(cue.kind)
+    if (cue.kind === 'station') {
+      const correct = answer(run, cue.degree, stations.length)
+      stations.push({ degree: cue.degree, correct })
+      resolveStation(run, cue.degree, correct)
+    }
+  }
+  return { run, stations, kinds }
+}
 
-test('same seed builds the same run, a new seed does not', () => {
-  assert.deepEqual(buildRun({ keyId: 'C', seed: 42 }), buildRun({ keyId: 'C', seed: 42 }))
-  assert.notDeepEqual(buildRun({ keyId: 'C', seed: 42 }), buildRun({ keyId: 'C', seed: 43 }))
-})
-
-test('a run is a fixed number of cues', () => {
-  for (const seed of SEEDS) assert.equal(buildRun({ keyId: 'C', seed }).length, RUN_CUES)
-})
-
-test('bombs are always off-key, notes and chords are always in-key', () => {
+test('a perfect run consumes exactly fourteen stations and ends there', () => {
   for (const seed of SEEDS) {
     for (const keyId of KEYS) {
-      const pcs = keyPcs(keyId)
-      for (const cue of buildRun({ keyId, seed })) {
-        if (cue.kind === 'bomb') {
-          assert.equal(cue.pcs.length, 1, 'a bomb lights one key')
-          assert.ok(!pcs.includes(cue.pcs[0]), 'bomb must be off-scale')
-        } else {
-          for (const pc of cue.pcs) assert.ok(pcs.includes(pc), 'cue must be in-scale')
-        }
-        if (cue.kind === 'chord') {
-          assert.equal(cue.pcs.length, 4, 'a chord cue is a seventh chord')
-          assert.equal(new Set(cue.pcs).size, 4, 'chord keys are distinct')
-        }
+      const { run, stations, kinds } = play({ keyId, seed })
+      assert.equal(stations.length, GOAL, 'fourteen stations, no more')
+      assert.equal(run.cleared, GOAL)
+      assert.equal(run.complete, true)
+      assert.equal(run.ended, true)
+      assert.equal(run.queue.length, 0, 'every owed slot was consumed')
+      for (const row of run.degrees) {
+        assert.equal(row.correct, 2, 'each degree cleared twice')
+        assert.equal(row.missed, 0)
       }
+      assert.equal(kinds.filter((kind) => kind === 'station').length, GOAL)
     }
   }
 })
 
-test('every chord cue is a seventh chord of the key, with an honest inversion', () => {
+test('the run never ends before fourteen cleared chords', () => {
+  const run = createRun({ keyId: 'C', seed: 3 })
+  for (let stations = 0; ; ) {
+    const cue = nextCue(run)
+    if (!cue) break
+    if (cue.kind !== 'station') continue
+    stations += 1
+    if (stations < GOAL) {
+      resolveStation(run, cue.degree, true)
+      assert.equal(run.ended, false, `ended at ${run.cleared} clears`)
+    } else {
+      resolveStation(run, cue.degree, true)
+      assert.equal(run.cleared, GOAL)
+      assert.equal(run.ended, true)
+    }
+  }
+})
+
+test('a missed station returns at least four station slots later', () => {
+  const run = createRun({ keyId: 'A', seed: 11 })
+  const seen = []
+  let missedDegree = null
+  for (;;) {
+    const cue = nextCue(run)
+    if (!cue) break
+    if (cue.kind !== 'station') continue
+    const wrong = missedDegree == null
+    if (wrong) missedDegree = cue.degree
+    seen.push(cue.degree)
+    resolveStation(run, cue.degree, !wrong)
+    if (!wrong && seen.indexOf(missedDegree) !== seen.lastIndexOf(missedDegree)) break
+  }
+  const first = seen.indexOf(missedDegree)
+  const again = seen.indexOf(missedDegree, first + 1)
+  assert.ok(again > first, 'the missed type came back')
+  assert.ok(again - first > NOTE_GAP, `${again - first} stations later, expected more than 4`)
+})
+
+test('no two stations are adjacent: four single notes sit between', () => {
+  for (const seed of SEEDS) {
+    const { kinds } = play({ keyId: 'C', seed })
+    for (let i = 1; i < kinds.length; i++) {
+      assert.ok(
+        !(kinds[i] === 'station' && kinds[i - 1] === 'station'),
+        `stations ${i - 1} and ${i} are adjacent`,
+      )
+    }
+    const firstStation = kinds.indexOf('station')
+    assert.equal(firstStation, 0, 'the run opens on a station')
+    const stations = kinds.filter((kind) => kind === 'station').length
+    const notes = kinds.filter((kind) => kind !== 'station').length
+    assert.equal(notes, (stations - 1) * NOTE_GAP, 'exactly four notes between stations')
+  }
+})
+
+test('every station is four distinct in-key pitch classes', () => {
   for (const seed of SEEDS) {
     for (const keyId of KEYS) {
-      const pcs = keyPcs(keyId)
       const sevenths = diatonicSevenths(keyId)
-      const cues = buildRun({ keyId, seed })
-      const chords = cues.filter((cue) => cue.kind === 'chord')
-      assert.ok(chords.length > 0, 'a run has at least one chord')
-      assert.ok(chords.length <= 3, 'chords stay rare')
-
-      for (const cue of chords) {
-        const chord = sevenths.find(
-          (candidate) =>
-            candidate.pitchClasses.length === cue.pcs.length &&
-            candidate.pitchClasses.every((pc) => cue.pcs.includes(pc)),
-        )
-        assert.ok(chord, `${cue.label} is not a diatonic seventh`)
-        for (const pc of cue.pcs) assert.ok(pcs.includes(pc), 'chord note leaves the key')
-        assert.equal(cue.numeral, chord.numeral)
-
-        // The label names the bass, and the sweep starts on that same key.
-        const spelled = cue.notesText.split(' ')
-        assert.deepEqual(spelled, chord.notes)
-        assert.equal(cue.label, `${chord.name}/${spelled[cue.inversion]}`)
-        assert.equal(cue.sweep[0], cue.pcs[cue.inversion])
-        assert.deepEqual([...cue.sweep].sort((a, b) => a - b), [...cue.pcs].sort((a, b) => a - b))
-      }
-
-      // Never two chords back to back.
-      for (let i = 1; i < cues.length; i++) {
-        assert.ok(!(cues[i].kind === 'chord' && cues[i - 1].kind === 'chord'))
+      const pcs = keyPcs(keyId)
+      const run = createRun({ keyId, seed })
+      for (;;) {
+        const cue = nextCue(run)
+        if (!cue) break
+        if (cue.kind !== 'station') continue
+        const chord = stationChord(run, cue.degree)
+        assert.ok(chord, 'a station always names a diatonic seventh')
+        assert.equal(chord.pitchClasses.length, 4)
+        assert.equal(new Set(chord.pitchClasses).size, 4, 'four distinct keys')
+        for (const pc of chord.pitchClasses) assert.ok(pcs.includes(pc), 'in the key')
+        assert.deepEqual(chord, sevenths[cue.degree])
       }
     }
   }
 })
 
-test('the first seven cues are plain notes, and bombs stay around one in five', () => {
-  for (const seed of SEEDS) {
-    const cues = buildRun({ keyId: 'C', seed })
-    cues.slice(0, 7).forEach((cue) => assert.equal(cue.kind, 'note'))
-    const bombs = cues.filter((cue) => cue.kind === 'bomb').length
-    assert.ok(bombs >= 6 && bombs <= 18, `${bombs} bombs in ${cues.length} cues`)
-  }
+test('the queue is a seeded shuffle of two slots per degree', () => {
+  const queue = buildQueue(42)
+  assert.equal(queue.length, 14)
+  assert.deepEqual([...queue].sort((a, b) => a - b), [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6])
+  assert.deepEqual(buildQueue(42), queue)
+  assert.notDeepEqual(buildQueue(43), queue)
+  assert.equal(hashSeed('42|house'), hashSeed('42|house'))
 })
 
-test('no key three cues running', () => {
-  for (const seed of SEEDS) {
-    for (const keyId of KEYS) {
-      const first = buildRun({ keyId, seed }).map((cue) => cue.pcs[0])
-      for (let i = 2; i < first.length; i++) {
-        assert.ok(
-          !(first[i] === first[i - 1] && first[i] === first[i - 2]),
-          `key ${first[i]} lit three cues running`,
-        )
-      }
-    }
-  }
+test('the safety cap ends an unwinnable run instead of hanging', () => {
+  const { run, kinds } = play({ keyId: 'C', seed: 5, answer: () => false })
+  assert.equal(run.cues.total, CAP_CUES)
+  assert.equal(kinds.length, CAP_CUES)
+  assert.equal(run.ended, true)
+  assert.equal(run.complete, false)
+  assert.equal(run.cleared, 0)
 })
 
-test('a lit window ends exactly where the next cue starts', () => {
-  for (const seed of SEEDS) {
-    for (const keyId of KEYS) {
-      const cues = buildRun({ keyId, seed })
-      for (let i = 1; i < cues.length; i++) {
-        const before = windowFor(cues[i - 1])
-        const after = windowFor(cues[i])
-        assert.equal(before[1], after[0], `cue ${i} leaves a gap or overlaps`)
-        assert.ok(before[1] > before[0], 'a window has length')
-      }
-    }
-  }
+test('a mixed run still terminates at fourteen clears', () => {
+  const { run, stations } = play({
+    keyId: 'Bb',
+    seed: 2024,
+    answer: (_, __, index) => index % 4 !== 3,
+  })
+  assert.equal(run.cleared, GOAL)
+  assert.equal(run.complete, true)
+  assert.ok(stations.length > GOAL, 'misses cost extra stations')
+  assert.ok(run.cues.total <= CAP_CUES)
+  assert.ok(stations.filter((station) => !station.correct).length > 0)
 })
 
-test('a run is slow enough to read: 1600ms to 900ms, about a minute long', () => {
-  for (const seed of SEEDS) {
-    const cues = buildRun({ keyId: 'C', seed })
-    const last = cues[cues.length - 1]
-    assert.ok(last.t + last.hold > 30000, 'a run takes at least 30s')
-    assert.ok(last.t + last.hold < 75000, 'a run stays under 75s')
-    for (let i = 1; i < cues.length; i++) {
-      assert.ok(cues[i].t - cues[i - 1].t >= 900, 'no cue lands closer than 900ms')
-    }
-  }
-})
-
-test('the cue interval ramps 1600 to 900 over 45s and the hold is the interval', () => {  assert.equal(intervalFor(0), 1600)
-  assert.equal(intervalFor(15000), 1367)
-  assert.equal(intervalFor(30000), 1133)
+test('timing and the note ramp are unchanged', () => {
+  assert.equal(intervalFor(0), 1600)
   assert.equal(intervalFor(45000), 900)
-  assert.equal(intervalFor(60000), 900)
-  assert.equal(holdFor(1600), 1600)
-  assert.equal(holdFor(1600, 'chord'), 2000)
-  assert.equal(holdFor(900), 900)
-  assert.equal(holdFor(900, 'chord'), 1125)
-  assert.equal(multiplierFor(0), 1)
-  assert.equal(multiplierFor(12), 4)
+  assert.equal(gradeTiming(0, 1600), 'perfect')
+  assert.equal(gradeTiming(350, 1600), 'perfect')
+  assert.equal(gradeTiming(351, 1600), 'good')
+  assert.equal(gradeTiming(1150, 1600), 'good')
+  assert.equal(gradeTiming(1151, 1600), 'late')
+  assert.equal(gradeTiming(1601, 1600), 'miss')
+  const run = createRun({ keyId: 'C', seed: 1 })
+  assert.equal(runAccuracy(run), 0)
 })
 
-test('350ms is PERFECT, the last 450ms of the light still counts, at half points', () => {
-  const hold = 1600
-  assert.equal(PERFECT_MS, 350)
-  assert.equal(GRACE_MS, 450)
-  assert.equal(gradeTiming(0, hold), 'perfect')
-  assert.equal(gradeTiming(350, hold), 'perfect')
-  assert.equal(gradeTiming(351, hold), 'good')
-  assert.equal(gradeTiming(hold - GRACE_MS, hold), 'good')
-  assert.equal(gradeTiming(hold - GRACE_MS + 1, hold), 'late')
-  assert.equal(gradeTiming(hold, hold), 'late')
-  assert.equal(gradeTiming(hold + 1, hold), 'miss')
-  assert.equal(pointsFor('perfect'), 100)
-  assert.equal(pointsFor('good'), 100)
-  assert.equal(pointsFor('late'), 50)
-  assert.equal(pointsFor('miss'), 0)
-})
-
-test('the chord break is 1320ms: 420ms of sweep plus 900ms held', () => {
-  assert.equal(BREAK_MS, 1320)
-})
-
-test('the break sweeps one key at a time, 140ms apart, then holds', () => {
-  assert.equal(breakSweep(0, 0), 1)
-  assert.equal(breakSweep(0, 139), 1)
-  assert.equal(breakSweep(0, 140), 2)
-  assert.equal(breakSweep(0, 279), 2)
-  assert.equal(breakSweep(0, 280), 3)
-  assert.equal(breakSweep(0, 420), 4)
-  assert.equal(breakSweep(0, BREAK_MS - 1), 4)
-})
-
-test('the break freezes the run: the chord and every later cue wait it out', () => {
-  const cues = buildRun({ keyId: 'C', seed: 1 }).map((cue) => ({ ...cue }))
-  let t = 5000
-  for (const cue of cues) {
-    cue.litAt = t
-    cue.darkAt = t + cue.hold
-    t += cue.hold
+test('toArcadeRow is a body the server accepts', () => {
+  const { run } = play({ keyId: 'Eb', seed: 8 })
+  const endedAt = new Date()
+  const meta = {
+    id: 'house-test-0001',
+    date: endedAt.toISOString().slice(0, 10),
+    startedAt: new Date(endedAt.getTime() - 90_000).toISOString(),
+    endedAt: endedAt.toISOString(),
+    durationMs: 90_000,
   }
-  const index = cues.findIndex((cue) => cue.kind === 'chord')
-  const chord = cues[index]
-  const now = chord.litAt + 4
-  const run = { cues, break: null }
+  const row = toArcadeRow(run, meta)
+  assert.equal(row.kind, 'arcade')
+  assert.equal(row.status, 'done')
+  assert.equal(row.payload.version, 5)
+  assert.equal(row.payload.mode, 'seventh-house')
+  assert.equal(row.payload.cleared, GOAL)
+  assert.equal(row.payload.complete, true)
+  assert.equal(row.attempts, GOAL)
+  assert.equal(row.misses, 0)
+  assert.equal(row.stages.length, 0)
 
-  startBreak(run, chord, now)
-
-  assert.equal(run.break.cue, chord)
-  assert.equal(chord.litAt, now + BREAK_MS, 'the window opens after the break')
-  assert.equal(chord.darkAt, now + BREAK_MS + chord.hold)
-  assert.equal(cues[index + 1].litAt, chord.darkAt, 'the next cue still abuts it')
-  for (let i = 0; i < index; i++) assert.ok(cues[i].darkAt < now, 'past cues stay put')
+  const valid = validate(row)
+  assert.equal(valid.kind, 'arcade')
+  assert.equal(valid.moduleCount, 0)
+  assert.equal(valid.passedStages, 0)
+  assert.equal(valid.scope, 'session')
+  assert.equal(valid.attempts, GOAL)
+  assert.equal(valid.misses, 0)
+  assert.equal(valid.durationMs, 90_000)
 })
 
-test('breaks leave the rest of the run joined up, with no holes and no overlaps', () => {
-  for (const seed of SEEDS) {
-    for (const keyId of KEYS) {
-      const cues = buildRun({ keyId, seed }).map((cue) => ({ ...cue }))
-      let t = 2000
-      for (const cue of cues) {
-        cue.litAt = t
-        cue.darkAt = t + cue.hold
-        t += cue.hold
-      }
-      const run = { cues, break: null }
-      for (const cue of cues) if (cue.kind === 'chord') startBreak(run, cue, cue.litAt)
-
-      for (let i = 1; i < cues.length; i++) {
-        const gap = cues[i].litAt - cues[i - 1].darkAt
-        assert.ok(gap >= 0, `cue ${i} overlaps the one before it`)
-        assert.ok(gap === 0 || gap === BREAK_MS, `cue ${i} leaves a ${gap}ms hole`)
-        if (gap > 0) assert.equal(cues[i].kind, 'chord', 'only a break holds a gap')
-      }
+test('an abandoned row is abandoned and still valid', () => {
+  const run = createRun({ keyId: 'C', seed: 2 })
+  for (;;) {
+    const cue = nextCue(run)
+    if (!cue) break
+    if (cue.kind === 'station') {
+      resolveStation(run, cue.degree, false)
+      break
     }
   }
+  const endedAt = new Date()
+  const row = toArcadeRow(run, {
+    id: 'house-test-0002',
+    date: endedAt.toISOString().slice(0, 10),
+    startedAt: new Date(endedAt.getTime() - 20_000).toISOString(),
+    endedAt: endedAt.toISOString(),
+    durationMs: 20_000,
+  })
+  assert.equal(row.status, 'abandoned')
+  assert.equal(row.payload.complete, false)
+  assert.equal(validate(row).scope, 'session')
 })

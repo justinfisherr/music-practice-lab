@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { keyDisplay } from '../data/scales.js'
+import { diatonicSevenths, keyDisplay } from '../data/scales.js'
 import { noteName } from '../data/diminishedChords.js'
 import { deleteRun, getRun } from '../session/api.js'
 import * as store from '../session/store.js'
@@ -70,6 +70,7 @@ export default function LedgerDetail({ id, onBack }) {
   }
 
   const manual = run.kind === 'manual'
+  const arcade = run.kind === 'arcade'
   const payload = run.payload || {}
   const lesson = payload.scope === 'lesson'
   const v3 = payload.version === 3 || payload.composition?.version === 3
@@ -81,6 +82,16 @@ export default function LedgerDetail({ id, onBack }) {
   const misses = run.misses ?? stages.reduce((sum, stage) => sum + (stage.misses || 0), 0)
   const passed = run.passedStages ?? stages.filter((stage) => stage.passed).length
   const moduleCount = run.moduleCount ?? payload.moduleCount ?? (v3 ? stages.length : 3)
+  const cleared = payload.cleared ?? Math.max(0, attempts - misses)
+  const accuracy = run.accuracy ?? payload.accuracy ?? 0
+  const seventhRows = arcade
+    ? diatonicSevenths(run.keyId).map((chord) => ({
+        name: chord.name,
+        numeral: chord.numeral,
+        correct: payload.chords?.[chord.degree]?.correct ?? 0,
+        missed: payload.chords?.[chord.degree]?.missed ?? 0,
+      }))
+    : []
 
   return (
     <section className="detail" aria-labelledby="detail-title">
@@ -92,21 +103,27 @@ export default function LedgerDetail({ id, onBack }) {
         <span className="detail__kicker">
           {manual
             ? `${run.date} · ${run.focus || 'OPEN'}`
-            : lesson
-              ? `${run.date} · LESSON`
-              : `${run.date} · ${run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}`}
+            : arcade
+              ? `${run.date} · SEVENTH HOUSE`
+              : lesson
+                ? `${run.date} · LESSON`
+                : `${run.date} · ${run.status === 'abandoned' ? 'ENDED EARLY' : 'DONE'}`}
         </span>
         <h2 className="detail__title" id="detail-title">
           {manual
             ? 'OPEN SESSION'
-            : lesson
-              ? lessonModule?.title || 'LESSON'
-              : `${keyDisplay(run.keyId)} MAJOR`}
+            : arcade
+              ? `${keyDisplay(run.keyId)} MAJOR`
+              : lesson
+                ? lessonModule?.title || 'LESSON'
+                : `${keyDisplay(run.keyId)} MAJOR`}
         </h2>
         <p className="detail__meta">
           {manual
             ? `${clock(run.durationMs)} · ${payload.scope || 'open'} · +0 XP`
-            : `${clock(run.durationMs)} · ${attempts} ATTEMPTS · ${misses} MISSES · ${passed}/${moduleCount} MODULES · +${run.xp ?? 0} XP`}
+            : arcade
+              ? `${clock(run.durationMs)} · ${cleared}/14 CHORDS · ${accuracy}% · +${run.xp ?? 0} XP`
+              : `${clock(run.durationMs)} · ${attempts} ATTEMPTS · ${misses} MISSES · ${passed}/${moduleCount} MODULES · +${run.xp ?? 0} XP`}
         </p>
       </div>
 
@@ -116,6 +133,32 @@ export default function LedgerDetail({ id, onBack }) {
         <div className="emptyblock">
           OPEN SESSION · {run.focus || 'FREE PLAY'} · {clock(run.durationMs)}
         </div>
+      ) : arcade ? (
+        <>
+          <table className="house__table">
+            <thead>
+              <tr>
+                <th scope="col">CHORD</th>
+                <th scope="col">NUM</th>
+                <th scope="col">HITS / 2</th>
+                <th scope="col">MISSED</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seventhRows.map((row) => (
+                <tr key={row.numeral + row.name}>
+                  <td>{row.name}</td>
+                  <td>{row.numeral}</td>
+                  <td className={row.correct < 2 ? 'is-back' : undefined}>{row.correct}</td>
+                  <td className={row.missed > 0 ? 'is-back' : undefined}>{row.missed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="house__outcome">
+            {run.status === 'abandoned' ? 'ENDED EARLY' : 'RUN COMPLETE'}
+          </p>
+        </>
       ) : (
         <>
           {v3 && modules.length ? (

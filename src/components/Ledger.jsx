@@ -16,6 +16,7 @@ function clock(ms) {
 }
 
 function rowLabel(run) {
+  if (run.kind === 'arcade') return `SEVENTH HOUSE · ${keyDisplay(run.keyId)}`
   if (run.kind !== 'manual' && run.scope === 'lesson') {
     return run.moduleTypes?.length ? `LESSON · ${run.moduleTypes[0]}` : 'LESSON'
   }
@@ -79,7 +80,10 @@ export default function Ledger({
 
   const minutes = Math.round(filtered.reduce((sum, run) => sum + (run.durationMs || 0), 0) / 60000)
   const graded = filtered.filter((run) => run.kind !== 'manual')
-  const stageTotal = graded.reduce((sum, run) => sum + (run.moduleCount || 3), 0)
+  const stageTotal = graded.reduce(
+    (sum, run) => sum + (run.kind === 'arcade' ? 0 : run.moduleCount || 3),
+    0,
+  )
   const passed = graded.reduce((sum, run) => sum + (run.passedStages || 0), 0)
   const misses = filtered.reduce((sum, run) => sum + (run.misses || 0), 0)
   const passRate = stageTotal ? Math.round((passed / stageTotal) * 100) : 0
@@ -87,7 +91,10 @@ export default function Ledger({
   const week = lastSevenRuns(runs)
   const weekMinutes = Math.round(week.reduce((sum, run) => sum + (run.durationMs || 0), 0) / 60000)
   const weekGraded = week.filter((run) => run.kind !== 'manual')
-  const weekModules = weekGraded.reduce((sum, run) => sum + (run.moduleCount || 3), 0)
+  const weekModules = weekGraded.reduce(
+    (sum, run) => sum + (run.kind === 'arcade' ? 0 : run.moduleCount || 3),
+    0,
+  )
   const weekPassed = weekGraded.reduce((sum, run) => sum + (run.passedStages || 0), 0)
   const weekRate = weekModules ? Math.round((weekPassed / weekModules) * 100) : 0
 
@@ -219,9 +226,11 @@ export default function Ledger({
                     <span className="runrow__stats">
                       {manual
                         ? 'OPEN SESSION'
-                        : `${run.attempts} ATTEMPTS · ${run.misses} MISSES · ${run.passedStages}/${run.moduleCount || 3} MODULES${
-                            run.moduleTypes?.length ? ` · ${run.moduleTypes.join(' ')}` : ''
-                          }`}
+                        : run.kind === 'arcade'
+                          ? `${run.attempts - run.misses}/14 CHORDS · ${run.accuracy ?? 0}%`
+                          : `${run.attempts} ATTEMPTS · ${run.misses} MISSES · ${run.passedStages}/${run.moduleCount || 3} MODULES${
+                              run.moduleTypes?.length ? ` · ${run.moduleTypes.join(' ')}` : ''
+                            }`}
                     </span>
                     <span
                       className={`runrow__status${run.status === 'abandoned' ? ' is-abandoned' : ''}`}

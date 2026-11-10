@@ -18,9 +18,9 @@ const KEYS = [
   { pc: 11, type: 'white', label: 'B' },
 ]
 
-export default function PianoKeys({ lit = {}, onKey, disabled = false }) {
+export default function PianoKeys({ lit = {}, onKey, disabled = false, dim = false }) {
   return (
-    <div className="piano" role="group" aria-label="Piano, one octave">
+    <div className={`piano${dim ? ' is-dim' : ''}`} role="group" aria-label="Piano, one octave">
       {KEYS.map((key) => {
         const state = lit[key.pc]
         const white = key.type === 'white'

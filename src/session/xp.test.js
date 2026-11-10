@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { deriveXp, xpBreakdown } from '../../lib/xp.js'
+import { deriveXp, xpBreakdown, ARCADE_XP, arcadeXp } from '../../lib/xp.js'
 
 const stage = (id, attempts, passed) => ({ id, attempts, misses: attempts - (passed ? 1 : 0), passed })
 
@@ -89,4 +89,17 @@ test('v3 completion bonus is session scope only', () => {
   assert.equal(deriveXp(stages, 'done', 'graded', 'lesson'), 60)
   assert.equal(deriveXp(stages, 'done', 'graded', 'open'), 60)
   assert.equal(deriveXp(stages, 'abandoned', 'graded', 'session'), 60)
+})
+
+// ---- SEVENTH HOUSE ---------------------------------------------------------
+test('a completed house pays 35, an abandoned one pays nothing', () => {
+  assert.equal(deriveXp([], 'done', 'arcade', 'session'), 35)
+  assert.equal(deriveXp([], 'abandoned', 'arcade', 'session'), 0)
+  assert.equal(arcadeXp('done'), ARCADE_XP)
+  assert.equal(arcadeXp('abandoned'), 0)
+})
+
+test('empty-stages graded done still pays the 15 completion bonus', () => {
+  assert.equal(deriveXp([], 'done', 'graded', 'session'), 15)
+  assert.equal(deriveXp([], 'abandoned', 'graded', 'session'), 0)
 })

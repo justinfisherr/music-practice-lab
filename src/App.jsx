@@ -8,7 +8,8 @@ import Lessons from './components/Lessons.jsx'
 import Ledger from './components/Ledger.jsx'
 import LedgerDetail from './components/LedgerDetail.jsx'
 import ManualBar from './components/ManualBar.jsx'
-import Falling from './components/Falling.jsx'
+import House from './components/House.jsx'
+import { MAJOR_KEYS } from './data/scales.js'
 import { MidiProvider } from './hooks/MidiContext.jsx'
 import { useSession } from './session/useSession.js'
 import { useRank } from './session/useRank.js'
@@ -128,6 +129,14 @@ export default function App() {
           onOpenWardrobe={() => navigate('stats?wardrobe=open')}
         />
       )
+    } else if (route.sub === 'game') {
+      content = (
+        <House
+          keyId={MAJOR_KEYS.some((key) => key.id === route.key) ? route.key : undefined}
+          onExit={() => navigate('session')}
+          onSubmit={practice.submitRun}
+        />
+      )
     } else {
       content = (
         <SessionTab
@@ -140,15 +149,20 @@ export default function App() {
           onOpenLedger={() => navigate('stats')}
           onOpenRun={openRun}
           onOpenWardrobe={() => navigate('stats?wardrobe=open')}
-          onOpenArcade={() => navigate('test/falling')}
+          onOpenArcade={(key) =>
+            navigate(key ? `session/game?key=${encodeURIComponent(key)}` : 'session/game')
+          }
           rank={rank}
           onTotalXp={applyTotalXp}
         />
       )
     }
   } else if (route.view === 'test') {
-    // Hidden prototype route: never in ROUTES, never in the nav.
-    content = route.sub === 'falling' ? <Falling onExit={() => navigate('session')} /> : null
+    // `#test/falling` is a read-only alias for the same view.
+    content =
+      route.sub === 'falling' ? (
+        <House onExit={() => navigate('session')} onSubmit={practice.submitRun} />
+      ) : null
   } else if (route.view === 'lessons') {
     content = (
       <Lessons type={route.type} foundation={route.foundation} onTry={startLesson} />
@@ -189,7 +203,14 @@ export default function App() {
 
   return (
     <MidiProvider>
-      <div className={'app' + (route.view === 'session' && route.sub === 'run' ? ' app--run' : '')}>
+      <div
+        className={
+          'app' +
+          (route.view === 'session' && (route.sub === 'run' || route.sub === 'game')
+            ? ' app--run'
+            : '')
+        }
+      >
         <a
           className="skip"
           href="#main-content"
