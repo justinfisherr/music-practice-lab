@@ -5639,16 +5639,15 @@ button.artistcard__hint:focus-visible {
   }
 }
 
-/* ---- Falling-note prototype: #test/falling. Throwaway surface. ---- */
-/* The block is the button: no pad, the field is the whole input. */
+/* ---- Lit-key prototype: #test/falling. Throwaway surface. ---- */
+/* No falling notes: a cue lights keys in place and the lit window is the grade
+   window. The keyboard is pinned under the field in both orientations. */
 .arcade {
   --arcade-bar: 52px;
   --arcade-hud: 40px;
-  --fall-ms: 900ms;
-  --note-h: 56px;
-  --chord-row: 20px;
   --cue-size: 56px;
   --combo-size: 20px;
+  --key-h: clamp(88px, 15vh, 124px);
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -5676,9 +5675,9 @@ button.artistcard__hint:focus-visible {
 .arcade__key {
   white-space: nowrap;
 }
-.arcade__timer {
+.arcade__count-cues {
   margin-left: auto;
-  font-size: 18px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 .arcade__btn {
@@ -5713,6 +5712,9 @@ button.artistcard__hint:focus-visible {
   align-items: baseline;
   gap: 6px;
 }
+.arcade__stat--right {
+  margin-left: auto;
+}
 .arcade__statlabel {
   color: var(--muted);
 }
@@ -5721,8 +5723,6 @@ button.artistcard__hint:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .arcade__mult {
-  margin-left: auto;
-  margin-right: 12px;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
@@ -5732,140 +5732,38 @@ button.artistcard__hint:focus-visible {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
 }
 .arcade__field--summary {
   overflow-y: auto;
 }
 
-/* The lane ends on the hit rule; the bottom third is a dead zone, so the block
-   you are tapping stays above your thumb. */
-.arcade__lane {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: calc(var(--field-h, 0px) * 0.68);
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--pad-gap);
-  padding-inline: 8px;
-  overflow: hidden;
-  border-bottom: 3px solid var(--ink);
-}
-.arcade__note {
-  position: absolute;
-  top: 0;
-  inset-inline: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--note-h);
-  border: 3px solid var(--ink);
-  background: var(--panel);
-  color: var(--ink);
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  box-shadow: 2px 2px 0 var(--ink);
-  animation: arcade-fall var(--fall-ms) linear both;
-}
-/* 12px of invisible padding: a moving target needs a bigger box than a static one. */
-.arcade__note::after {
-  content: '';
-  position: absolute;
-  inset: -6px 0;
-}
-.arcade__note--chord {
-  flex-direction: column;
-  font-size: 13px;
-  border-color: var(--signal);
-}
-.arcade__pc {
-  display: block;
-  line-height: 1;
-}
-.arcade__note--chord .arcade__pc {
-  line-height: var(--chord-row);
-}
-.arcade__note.is-miss,
-.arcade__note.is-hit,
-.arcade__note.is-bomb {
-  background: var(--ink);
-  color: var(--bg);
-}
-.arcade__note.is-bomb {
-  border-color: var(--signal);
-}
-
-/* A backgrounded tab freezes the field, notes and cue alike. */
-.arcade__field.is-paused .arcade__note,
-.arcade__field.is-paused .arcade__cue {
-  animation-play-state: paused;
-}
-
-@keyframes arcade-fall {
-  from {
-    transform: translateY(-100%);
-  }
-  /* The block's bottom lands on the lane's 3px hit rule. */
-  to {
-    transform: translateY(calc(var(--field-h, 0px) * 0.68 - 3px - 100%));
-  }
-}
-
-/* Reduced motion: no travel, one static block sitting on the line. */
-.arcade__static {
+/* The middle holds two things: the grade word and NEXT. Nothing else. */
+.arcade__stage {
   position: absolute;
   inset: 0;
-  padding: 8px;
-  z-index: 1;
-}
-.arcade__next {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  padding: 0 10px;
-  border: 3px solid var(--ink);
-  background: var(--panel);
-}
-.arcade__staticlabel {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: var(--muted);
-}
-.arcade__staticname {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--muted);
-}
-.arcade__note--static {
-  left: 8px;
-  right: 8px;
-  top: calc(var(--field-h, 0px) * 0.68 - 3px - var(--note-h));
-  animation: none;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  text-align: center;
 }
 
-/* The one big word: upper third, opaque, colour flip only. */
+/* Opaque, above the keyboard, colour flip only — no motion. */
 .arcade__cue {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 34%;
-  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  pointer-events: none;
-  animation: arcade-cue 360ms linear both;
+  min-height: calc(var(--cue-size) * 1.2);
+  padding: 4px 18px;
+  border: 3px solid transparent;
+  background: var(--bg);
+}
+.arcade__cue.is-empty {
+  visibility: hidden;
 }
 .arcade__cue--perfect,
 .arcade__cue--good,
@@ -5876,15 +5774,14 @@ button.artistcard__hint:focus-visible {
 .arcade__cue--miss,
 .arcade__cue--bomb,
 .arcade__cue--stray {
-  background: var(--bg);
-  border: 3px solid var(--signal);
+  border-color: var(--signal);
   color: var(--signal-ink);
 }
 .arcade__cueword {
   font-size: var(--cue-size);
   font-weight: 800;
   letter-spacing: 2px;
-  line-height: 0.9;
+  line-height: 0.95;
 }
 .arcade__combo {
   font-size: var(--combo-size);
@@ -5898,41 +5795,59 @@ button.artistcard__hint:focus-visible {
   border-top: 3px solid currentColor;
 }
 
-/* 90ms slam, 120ms hold, 150ms out: the out is one hard cut, no fade. */
-@keyframes arcade-cue {
-  0%,
-  58.33% {
-    opacity: 1;
-  }
-  58.34%,
-  100% {
-    opacity: 0;
-  }
+.arcade__next {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  min-width: 200px;
+  padding-top: 6px;
+  border-top: 3px solid var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+.arcade__nextlabel {
+  font-size: 10px;
+  letter-spacing: 2px;
 }
 
 .arcade__ready,
-.arcade__count,
-.arcade__confirm {
+.arcade__count {
   position: absolute;
   inset: 0;
   z-index: 4;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  padding: 16px;
   background: var(--bg);
 }
 .arcade__ready {
   justify-content: center;
-  gap: 10px;
-  padding: 16px;
 }
 .arcade__count {
   align-items: center;
   justify-content: center;
 }
+
+/* Pause freezes the field: the lit keys stay lit and only this block appears. */
 .arcade__confirm {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 50%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 10px;
+  padding: 16px;
+  transform: translateY(-50%);
+  border: 3px solid var(--ink);
+  background: var(--bg);
+  box-shadow: var(--shadow-heavy);
   text-align: center;
   font-size: 12px;
   font-weight: 800;
@@ -6060,25 +5975,130 @@ button.artistcard__hint:focus-visible {
   white-space: nowrap;
 }
 
-/* On a wide screen the four columns would be ~300px of travel for one thumb. */
-@media (min-width: 768px) {
-  .arcade__lane,
-  .arcade__cue,
-  .arcade__static {
-    max-width: 520px;
-    margin-inline: auto;
-  }
+/* ---- The keyboard: one octave, pinned to the bottom. ---- */
+.piano {
+  flex: 0 0 auto;
+  position: relative;
+  display: flex;
+  width: min(630px, 100vw);
+  height: var(--key-h);
+  margin-inline: auto;
+  border-top: 3px solid var(--ink);
+  background: var(--bg);
 }
 
-/* Landscape is a real layout: shorter chrome, the field keeps the rest. */
+.piano__white {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 8px;
+  border: 0;
+  border-right: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition:
+    background-color var(--t-stamp) linear,
+    color var(--t-stamp) linear;
+}
+
+/* Centred on the rule between its two whites; the 44px hit box juts into their
+   upper corners, which is visually the black key's own area. */
+.piano__black {
+  position: absolute;
+  top: 0;
+  left: calc((var(--after) + 1) * 100% / 7);
+  z-index: 2;
+  width: calc(100% / 7 * 0.58);
+  height: calc(var(--key-h) * 0.62);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--ink); /* the glyph stays dark until the key is lit */
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition:
+    background-color var(--t-stamp) linear,
+    color var(--t-stamp) linear;
+}
+.piano__black::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: max(44px, 100%);
+  transform: translateX(-50%);
+}
+
+/* Lit: ink fill with the paper label. */
+.piano__white.is-note,
+.piano__white.is-bomb {
+  background: var(--ink);
+  color: var(--bg);
+}
+.piano__black.is-note,
+.piano__black.is-bomb {
+  color: var(--bg);
+}
+
+/* Chord: the border says chord, the fill stays readable. */
+.piano__white.is-chord,
+.piano__black.is-chord {
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 3px var(--signal);
+}
+
+/* Bomb: ink fill with a signal border. Never signal behind text. */
+.piano__white.is-bomb,
+.piano__black.is-bomb {
+  box-shadow: inset 0 0 0 3px var(--signal);
+}
+
+.piano__white:active {
+  background: var(--ink);
+  color: var(--bg);
+}
+.piano__black:active {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.piano__white:focus-visible,
+.piano__black:focus-visible {
+  z-index: 3;
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.piano__white:disabled,
+.piano__black:disabled {
+  cursor: default;
+}
+
+/* Landscape is a real layout: shorter chrome, a bigger word, a shorter key. */
 @media (orientation: landscape) and (max-height: 500px) {
   .arcade {
     --arcade-bar: 44px;
     --arcade-hud: 32px;
     --cue-size: 72px;
-  }
-  .arcade__cue {
-    height: 44%;
+    --key-h: 96px;
   }
   .arcade__ready {
     gap: 6px;
@@ -6090,11 +6110,10 @@ button.artistcard__hint:focus-visible {
   }
 }
 
+/* The only thing left that moves is the 90ms press stamp. */
 @media (prefers-reduced-motion: reduce) {
-  .arcade__note {
-    animation: none;
-  }
-  .arcade__cue {
-    animation: none;
+  .piano__white,
+  .piano__black {
+    transition: none;
   }
 }

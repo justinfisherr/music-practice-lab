@@ -115,6 +115,33 @@ export async function playCountIn(bpm = 80, beats = 4) {
   await new Promise((resolve) => setTimeout(resolve, gapMs * count + 60))
 }
 
+// Wrong-key buzz: two low squares a semitone apart, 160ms. Never longer than
+// 180ms, never a melody.
+export function playBuzz() {
+  if (!soundOn) return
+  const audio = getContext()
+  if (!audio) return
+  try {
+    if (audio.state !== 'running') audio.resume().catch(() => {})
+    const t0 = audio.currentTime + 0.01
+    for (const freq of [110, 116.54]) {
+      const osc = audio.createOscillator()
+      const gain = audio.createGain()
+      osc.type = 'square'
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0, t0)
+      gain.gain.linearRampToValueAtTime(0.05, t0 + 0.004)
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16)
+      osc.connect(gain)
+      gain.connect(audio.destination)
+      osc.start(t0)
+      osc.stop(t0 + 0.18)
+    }
+  } catch {
+    // audio can be blocked without a gesture; the run still grades
+  }
+}
+
 export async function playPhrase(pcs, { gap = 0.45 } = {}) {
   if (!soundOn || !pcs?.length) return
   const audio = getContext()

@@ -1,29 +1,38 @@
 import { keyById } from '../data/scales.js'
 
-// Falling-note prototype: pure timing/geometry logic, no DOM. The page renders
-// from these events; nothing here knows what a phone is.
+// Lit-key prototype: pure cue logic, no DOM. A cue lights one to four keys on a
+// one-octave piano and stays lit for its grade window. Nothing here knows what a
+// phone is.
 
-export const RUN_NOTES = 60
-export const RUN_MS = 60000
-export const FALL_MS = 900
-export const HIT_MS = 140 // early/late window around the hit line
-export const CHORD_STEP_MS = 90 // each extra chord note widens the window
-export const PERFECT_MS = 70
-export const GOOD_MS = 160
+export const RUN_CUES = 60
 export const BEST_KEY = 'mpl.arcade.falling.best'
+export const PERFECT_MS = 200 // tap this soon after the light = PERFECT
+export const CUE_WORD_MS = 420 // how long a grade word holds on screen
 
-const BASE_MS = 850
-const FLOOR_MS = 420
+const BASE_MS = 900
+const FLOOR_MS = 500
 const RAMP_MS = 30000
+const HOLD_FLOOR_MS = 420
+const HOLD_RATIO = 0.85
 const CHORD_ODDS = 1 / 7
 const MAX_CHORDS = 3
 const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11]
 
-// 850ms between notes at the start, 420ms once the run is 30s old, then flat.
+// 900ms between cues at the start, 500ms once the run is 30s old, then flat.
 export function intervalFor(elapsedMs) {
   if (!(elapsedMs > 0)) return BASE_MS
   if (elapsedMs >= RAMP_MS) return FLOOR_MS
   return Math.round(BASE_MS + (FLOOR_MS - BASE_MS) * (elapsedMs / RAMP_MS))
+}
+
+// The lit window is the grade window: always shorter than the gap to the next
+// cue, so two cues can never be lit at once.
+export function holdFor(interval) {
+  return Math.max(HOLD_FLOOR_MS, Math.round(interval * HOLD_RATIO))
+}
+
+export function windowFor(cue) {
+  return [cue.t, cue.t + cue.hold]
 }
 
 export function multiplierFor(streak) {
@@ -33,36 +42,10 @@ export function multiplierFor(streak) {
   return 1
 }
 
-export function windowFor(event) {
-  const extra = event.kind === 'chord' ? CHORD_STEP_MS * (event.pcs.length - 1) : 0
-  return [event.t - HIT_MS, event.t + HIT_MS + extra]
-}
-
-// A tap at `at` (ms from run start). done() marks events already resolved.
-export function grade(events, pc, at, done = () => false) {
-  let best = null
-  for (const event of events) {
-    if (done(event) || !event.pcs.includes(pc)) continue
-    const [start, end] = windowFor(event)
-    if (at < start || at > end) continue
-    if (!best || event.t < best.t) best = event
-  }
-  if (!best) return { event: null, result: 'stray' }
-  return { event: best, result: best.kind === 'bomb' ? 'bomb' : 'hit' }
-}
-
-// Graded to the middle of the window, so a chord's extra span does not count
-// against the one tap that clears it.
-export function deltaFor(event, at) {
-  const extra = event.kind === 'chord' ? CHORD_STEP_MS * (event.pcs.length - 1) : 0
-  return at - (event.t + extra / 2)
-}
-
+// ms from the light is all the grader needs: inside the window is GOOD, the
+// first 200ms is PERFECT.
 export function gradeTiming(delta) {
-  const off = Math.abs(delta)
-  if (off <= PERFECT_MS) return 'perfect'
-  if (off <= GOOD_MS) return 'good'
-  return 'miss'
+  return delta <= PERFECT_MS ? 'perfect' : 'good'
 }
 
 export function bestScore() {
@@ -94,7 +77,8 @@ function mulberry32(seed) {
   }
 }
 
-export function buildRun({ keyId = 'C', seed = 1, notes = RUN_NOTES } = {}) {
+// Cues on a timeline. `pcs` is what lights. A bomb is one off-key key.
+export function buildRun({ keyId = 'C', seed = 1, cues = RUN_CUES } = {}) {
   const rand = mulberry32(seed)
   const key = keyById(keyId)
   const inKey = MAJOR_STEPS.map((step) => (key.tonic + step) % 12)
@@ -102,51 +86,39 @@ export function buildRun({ keyId = 'C', seed = 1, notes = RUN_NOTES } = {}) {
   const pick = (pool) => Math.floor(rand() * pool.length)
 
   const events = []
-  let t = intervalFor(0) * 2 // a beat to read the field before the first note
-  let lastPc = -1
-  let colA = -1 // two back
-  let colB = -1 // one back
+  let t = intervalFor(0) * 2 // a beat to read NEXT before the first light
+  let firstA = -1
+  let firstB = -1
   let chords = 0
-  let nextBomb = 3 // the 4th note is the first possible bomb
+  let nextBomb = 3 + Math.floor(rand() * 3) // cue 4 at the earliest
+  const repeat = (pc) => pc === firstA && pc === firstB
 
-  for (let i = 0; events.length < notes; i++) {
-    if (t > RUN_MS) break
+  for (let i = 0; i < cues; i++) {
     const interval = intervalFor(t)
-    const avoidCol = colA === colB ? colB : -1
+    const hold = holdFor(interval)
     const canSpecial = i >= 3
     let event
 
     if (canSpecial && chords < MAX_CHORDS && rand() < CHORD_ODDS) {
-      // A real diatonic triad (or seventh while the field is still slow).
-      const four = interval > 400 && rand() < 0.25
-      const degrees = four ? [0, 2, 4, 6] : [0, 2, 4]
+      // A diatonic dyad, triad or seventh, rooted somewhere that breaks a run.
+      const size = 2 + Math.floor(rand() * 3)
       let root = pick(MAJOR_STEPS)
-      for (let spin = 0; spin < 7; spin++) {
-        const anchor = inKey[root]
-        if (anchor !== lastPc && (avoidCol < 0 || anchor % 4 !== avoidCol)) break
-        root = (root + 1) % 7
-      }
-      const pcs = degrees.map((d) => inKey[(root + d) % 7])
-      event = { t: Math.round(t), pcs, kind: 'chord', column: pcs[0] % 4 }
+      for (let spin = 0; spin < 6 && repeat(inKey[root]); spin++) root = (root + 1) % 7
+      const pcs = [0, 2, 4, 6].slice(0, size).map((step) => inKey[(root + step) % 7])
+      event = { t: Math.round(t), hold, pcs, kind: 'chord' }
       chords += 1
     } else {
-      let wantBomb = false
-      if (canSpecial && i >= nextBomb) {
-        wantBomb = true
-        nextBomb = i + 4 + Math.floor(rand() * 3) // roughly every fifth note
-      }
-      const pool = (wantBomb ? offKey : inKey).filter(
-        (pc) => pc !== lastPc && (avoidCol < 0 || pc % 4 !== avoidCol),
-      )
-      const pc = pool[pick(pool)] ?? (inKey.find((p) => p !== lastPc) ?? 0)
-      event = { t: Math.round(t), pcs: [pc], kind: wantBomb ? 'bomb' : 'note', column: pc % 4 }
+      const bomb = canSpecial && i >= nextBomb
+      if (bomb) nextBomb = i + 4 + Math.floor(rand() * 3)
+      const pool = (bomb ? offKey : inKey).filter((pc) => !repeat(pc))
+      const pc = pool.length ? pool[pick(pool)] : (bomb ? offKey : inKey)[0]
+      event = { t: Math.round(t), hold, pcs: [pc], kind: bomb ? 'bomb' : 'note' }
     }
 
     events.push(event)
-    lastPc = event.pcs[0]
-    colA = colB
-    colB = event.column
-    t += interval + (event.kind === 'chord' ? CHORD_STEP_MS * (event.pcs.length - 1) : 0)
+    firstA = firstB
+    firstB = event.pcs[0]
+    t += interval
   }
 
   return events
