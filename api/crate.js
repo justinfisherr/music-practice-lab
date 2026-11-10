@@ -291,7 +291,11 @@ export default async function handler(req, res) {
         return write(res, 200, body)
       }
       if (payload?.action === 'import') {
-        if (!Array.isArray(payload.rows)) return write(res, 400, { error: 'invalid_body' })
+        if (!Array.isArray(payload.rows) || payload.rows.length > MAX_IMPORT) {
+          return write(res, 400, { error: 'invalid_body' })
+        }
+        // Every row invalid means a bad payload, not a successful no-op.
+        if (!cleanImportRows(payload.rows).length) return write(res, 400, { error: 'invalid_rows' })
         await ensure()
         return write(res, 200, await importRows(payload.rows))
       }
