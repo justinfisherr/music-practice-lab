@@ -2,6 +2,7 @@
 // are measured (ReccoBeats); the changes are charted by the model. Every
 // failure path is a 200 with a null it can render, never an error status.
 import { buildTuneMessages, noteName, parseTune } from '../lib/tune.js'
+import { pickTuneKey } from '../src/data/tuneChords.js'
 
 const ALLOWED = new Set([
   'https://music-practice-lab.vercel.app',
@@ -218,12 +219,26 @@ export default async function handler(req, res) {
       })
 
       const parsed = charted.parsed || null
-      const changes = parsed ? { known: parsed.known, chords: parsed.chords } : null
-      const key = audio?.keyPc != null && audio?.mode
-        ? { pc: audio.keyPc, mode: audio.mode, source: 'audio' }
-        : parsed?.key
-          ? { ...parsed.key, source: 'model' }
-          : null
+      // `root` repeats `pc`: the client builds its chord specs from either, and
+      // the shape stays stable for the reader that already uses `pc`.
+      const changes = parsed
+        ? {
+            known: parsed.known,
+            chords: parsed.chords.map((chord) => ({ ...chord, root: chord.pc })),
+          }
+        : null
+      const audioKey = audio?.keyPc != null && audio?.mode
+        ? { pc: audio.keyPc, mode: audio.mode }
+        : null
+      // A measured key that leaves most of the chart outside it is usually the
+      // wrong key; the model's own key takes over only when it reads better.
+      const picked = pickTuneKey({
+        audioKey,
+        modelKey: parsed?.key ?? null,
+        chords: parsed?.chords || [],
+      })
+      if (audioKey && picked !== audioKey) console.warn('tune key', 'outside')
+      const key = picked ? { ...picked, source: picked === audioKey ? 'audio' : 'model' } : null
       const tempo = audio?.bpm != null
         ? { bpm: audio.bpm, source: 'audio' }
         : parsed?.tempo != null

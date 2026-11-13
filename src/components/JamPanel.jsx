@@ -5,8 +5,9 @@ import { keyDisplay } from '../data/scales.js'
 
 // FREE PLAY: the same 30-second changes round as the set. The backing loops
 // after the bell for practice; the round records to the shared local store.
-// A tune preset (`{id,name,degrees,bpm}`) replaces the named progression: the
-// degrees are the tune's bars, and its id is the round's save bucket.
+// A tune preset (`{id,name,degrees,chords,bpm}`) replaces the named progression:
+// `chords` are the tune's literal bars (they win over degrees), and its id is
+// the round's save bucket.
 export default function JamPanel({
   keyId,
   preset = null,
@@ -20,6 +21,7 @@ export default function JamPanel({
 
   const changesId = preset ? `tune:${preset.id}` : manualChangesId
   const degrees = preset ? repeatDegrees(preset.degrees, barsPerChord) : null
+  const chords = preset?.chords ? repeatDegrees(preset.chords, barsPerChord) : null
 
   const changes = useChangesRound({
     keyId,
@@ -28,6 +30,7 @@ export default function JamPanel({
     bpm,
     roundSeconds: 30,
     degrees,
+    chords,
   })
 
   // A tune's tempo can sit outside the manual 70-100 window; the track meets it.
@@ -51,12 +54,12 @@ export default function JamPanel({
   }, [autoStartToken]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const position = changes.position
-  const chord = position ? chordLabel(keyId, position.degree) : '—'
+  const chord = position ? position.label || chordLabel(keyId, position.degree) : '—'
   const changesName = preset
     ? preset.name
     : PLAY_CHANGES.find((entry) => entry.id === (changes.round?.changesId || changesId))?.name ||
       'turnaround'
-  const preview = preset ? degrees : buildJamDegrees(changesId, barsPerChord)
+  const preview = preset ? chords || degrees : buildJamDegrees(changesId, barsPerChord)
   const report = changes.round || changes.live
 
   return (

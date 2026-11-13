@@ -15,13 +15,17 @@ export function createTransport({
   keyId,
   bpm = 80,
   degrees = TURNAROUND_DEGREES,
+  chords = null,
   onBeat,
   onChord,
   onEnd,
 } = {}) {
+  // A tune brings literal chords; the graded set and the named progressions
+  // still come through as degrees. `chords` wins when it is supplied.
+  const specs = Array.isArray(chords) && chords.length ? chords : null
   const progression =
     Array.isArray(degrees) && degrees.length ? degrees : TURNAROUND_DEGREES
-  const bars = Array.isArray(degrees) && degrees.length ? degrees.length : BARS
+  const bars = specs ? specs.length : Array.isArray(degrees) && degrees.length ? degrees.length : BARS
   const beatMs = 60000 / bpm
   const barMs = beatMs * BEATS_PER_BAR
   const totalMs = barMs * bars
@@ -46,14 +50,16 @@ export function createTransport({
     const bar = Math.min(bars - 1, Math.floor(elapsed / barMs))
     const beat = Math.min(BEATS_PER_BAR - 1, Math.floor((elapsed - bar * barMs) / beatMs))
     const degree = progression[bar]
+    const spec = specs ? specs[bar] : null
     return {
       elapsedMs: elapsed,
       bar,
       beat,
       beatInBar: beat,
       chordIndex: bar,
-      degree,
-      pcs: seventhByDegree(keyId, degree),
+      degree: spec ? null : degree,
+      label: spec?.label ?? null,
+      pcs: spec ? spec.pcs : seventhByDegree(keyId, degree),
       totalMs,
     }
   }
@@ -79,7 +85,11 @@ export function createTransport({
     audioStart = context.currentTime + 0.06
     for (let bar = 0; bar < bars; bar++) {
       const degree = progression[bar]
-      const root = degreeRootPc(keyId, degree)
+      const spec = specs ? specs[bar] : null
+      // A chart's bass is the root it actually names, not pcs[0].
+      const namedRoot = ((Number(spec?.root ?? spec?.pc) || 0) % 12 + 12) % 12
+      const root = spec ? namedRoot : degreeRootPc(keyId, degree)
+      const pcs = spec ? spec.pcs : seventhByDegree(keyId, degree)
       const barStart = audioStart + (bar * barMs) / 1000
       // Bass root, low and short.
       tone({
@@ -90,7 +100,7 @@ export function createTransport({
         type: 'triangle',
       })
       // Soft chord stab on the downbeat.
-      seventhByDegree(keyId, degree).forEach((pc, index) => {
+      pcs.forEach((pc, index) => {
         tone({
           freq: midiToFreq(60 + pc),
           at: barStart + index * 0.006,

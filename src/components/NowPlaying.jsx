@@ -36,11 +36,12 @@ export default function NowPlaying({
   const tuneKey = tune?.key || null
   const tempo = tune?.tempo || null
   const cells = view?.cells || []
-  const outsideCount = view?.outsideCount || 0
   const applied = keySource === 'tune'
   const notApplied = Boolean(track && keySource === 'manual' && overriddenTrack === track.id)
   const jamRunning = Boolean(jamPhase && jamPhase !== 'idle')
-  const canJam = Boolean(tuneKey && cells.length && outsideCount === 0 && !analyzing)
+  // A chart is jammable in any key: the round plays the literal chords, and the
+  // OUT marks are information, not a veto.
+  const canJam = Boolean(tuneKey && cells.length && !analyzing)
   const stale = Boolean(now?.at) && Date.now() - now.at > STALE_MS
   const stamp = now?.at ? (stale ? `STALE · ${ago(now.at)}` : `AS OF ${ago(now.at)}`) : ''
 
@@ -171,12 +172,6 @@ export default function NowPlaying({
                 {tune?.reason === 'no_api_key'
                   ? 'NO CHORD MODEL. THE KEY AND TEMPO STILL READ; THE CHANGES DO NOT.'
                   : 'CHORDS UNAVAILABLE'}
-              </span>
-            ) : null}
-
-            {outsideCount ? (
-              <span className="np__warn">
-                {`${outsideCount} OF ${cells.length} CHORDS ARE OUTSIDE ${view.label}. PLAY THE GRID INSTEAD.`}
               </span>
             ) : null}
 

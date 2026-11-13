@@ -7,6 +7,7 @@ import {
   loadRounds,
   saveRound,
   scoreChangeChord,
+  targetForChord,
   targetForDegree,
   voiceMovement,
 } from './changes.js'
@@ -147,4 +148,38 @@ test('rounds record to localStorage, cap at 50, and merge session and free play'
   assert.equal(stats.perProgression.length, 2)
   assert.equal(stats.last.length, 8)
   assert.equal(stats.last[0].score, 540)
+})
+
+test('a literal chord spec grades its own seventh and triad', () => {
+  const target = targetForChord({
+    root: 10,
+    quality: 'dom7',
+    pcs: [2, 5, 8, 10],
+    label: 'Bb7',
+  })
+  assert.equal(target.name, 'Bb7')
+  assert.deepEqual(target.pcs, [2, 5, 8, 10])
+  assert.deepEqual(target.triadPcs, [10, 2, 5])
+
+  // A triad of the chord is a hit; a chord a semitone off is not.
+  const triad = scoreChangeChord({
+    targetPcs: target.pcs,
+    triadPcs: target.triadPcs,
+    playedMidi: [58, 62, 65],
+  })
+  assert.equal(triad.hit, true)
+
+  const wrong = scoreChangeChord({
+    targetPcs: target.pcs,
+    triadPcs: target.triadPcs,
+    playedMidi: [58, 62, 64],
+  })
+  assert.equal(wrong.hit, false)
+  assert.equal(wrong.points, 0)
+})
+
+test('a literal chord spec fills in pcs from its quality when the chart omits them', () => {
+  const target = targetForChord({ root: 4, quality: 'dom7', label: 'E7' })
+  assert.deepEqual(target.pcs, [2, 4, 8, 11])
+  assert.deepEqual(target.triadPcs, [4, 8, 11])
 })

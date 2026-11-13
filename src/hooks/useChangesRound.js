@@ -9,6 +9,7 @@ import {
   CHANGES_ROUND_SECONDS,
   saveRound,
   scoreChangeChord,
+  targetForChord,
   targetForDegree,
 } from '../session/changes.js'
 
@@ -32,6 +33,7 @@ export function useChangesRound({
   bpm = 84,
   roundSeconds = CHANGES_ROUND_SECONDS,
   degrees = null,
+  chords = null,
   onRoundEnd,
 }) {
   const [phase, setPhase] = useState('idle')
@@ -47,16 +49,17 @@ export function useChangesRound({
   const tokenRef = useRef(0)
   const intervalRef = useRef(null)
   const degreesRef = useRef([])
+  const chordsRef = useRef(null)
   const notesRef = useRef([])
   const pendingRef = useRef([])
   const statsRef = useRef({ ...EMPTY })
   const previousMidiRef = useRef(null)
   const roundEndRef = useRef(0)
   const keyRef = useRef(keyId)
-  const paramsRef = useRef({ changesId, barsPerChord, bpm, roundSeconds, degrees })
+  const paramsRef = useRef({ changesId, barsPerChord, bpm, roundSeconds, degrees, chords })
   const onRoundEndRef = useRef(onRoundEnd)
   keyRef.current = keyId
-  paramsRef.current = { changesId, barsPerChord, bpm, roundSeconds, degrees }
+  paramsRef.current = { changesId, barsPerChord, bpm, roundSeconds, degrees, chords }
   onRoundEndRef.current = onRoundEnd
 
   const clearPending = useCallback(() => {
@@ -134,11 +137,16 @@ export function useChangesRound({
     if (outcome.hit) previousMidiRef.current = midi
   }
 
-  function scheduleChange(degree) {
+  function scheduleChange(degree, bar) {
     if (!startedRef.current || !scoringRef.current) return
     const at = performance.now()
     if (at > roundEndRef.current) return
-    const event = { at, degree, target: targetForDegree(keyRef.current, degree) }
+    const spec = chordsRef.current?.[bar]
+    const event = {
+      at,
+      degree,
+      target: spec ? targetForChord(spec) : targetForDegree(keyRef.current, degree),
+    }
     const timer = setTimeout(() => {
       pendingRef.current = pendingRef.current.filter((entry) => entry.timer !== timer)
       if (scoringRef.current || at <= roundEndRef.current) finishChange(event)
@@ -152,7 +160,8 @@ export function useChangesRound({
       keyId: keyRef.current,
       bpm: paramsRef.current.bpm,
       degrees: degreesRef.current,
-      onChord: (_bar, degree) => scheduleChange(degree),
+      chords: chordsRef.current,
+      onChord: (bar, degree) => scheduleChange(degree, bar),
       onEnd: () => {
         if (!startedRef.current || !mountedRef.current) return
         beginTransport()
@@ -221,10 +230,13 @@ export function useChangesRound({
     unlockAudio()
     stopInternal()
     resetStats()
-    // A tune preset brings its own progression; otherwise the named one.
-    degreesRef.current = paramsRef.current.degrees?.length
-      ? paramsRef.current.degrees
-      : buildJamDegrees(paramsRef.current.changesId, paramsRef.current.barsPerChord)
+    // A tune preset brings its own chords (or degrees); otherwise the named one.
+    chordsRef.current = paramsRef.current.chords?.length ? paramsRef.current.chords : null
+    degreesRef.current = chordsRef.current
+      ? []
+      : paramsRef.current.degrees?.length
+        ? paramsRef.current.degrees
+        : buildJamDegrees(paramsRef.current.changesId, paramsRef.current.barsPerChord)
     const token = tokenRef.current
     setPhase('countin')
     await playCountIn(paramsRef.current.bpm)

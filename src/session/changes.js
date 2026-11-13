@@ -1,5 +1,6 @@
 import { diatonicChords } from '../data/scales.js'
-import { pitchClassesEqual } from '../data/diminishedChords.js'
+import { noteName, pitchClassesEqual } from '../data/diminishedChords.js'
+import { INTERVALS } from '../data/tuneChords.js'
 import { chordLabel, seventhByDegree } from './set.js'
 import { safeRead, safeWrite } from './store.js'
 
@@ -15,6 +16,22 @@ export function targetForDegree(keyId, degree) {
     name: chordLabel(keyId, degree),
     pcs: seventhByDegree(keyId, degree),
     triadPcs: diatonicChords(keyId)[degree - 1].pitchClasses,
+  }
+}
+
+// The literal-chord path: a tune's chart names the chord itself, so the target
+// is its pitch set and a triad cut from the same quality intervals.
+export function targetForChord(chord = {}) {
+  const root = ((Number(chord.root ?? chord.pc) || 0) % 12 + 12) % 12
+  const intervals = INTERVALS[chord.quality] || [0, 4, 7]
+  const pcs =
+    Array.isArray(chord.pcs) && chord.pcs.length
+      ? chord.pcs
+      : [...new Set(intervals.map((step) => (root + step) % 12))].sort((a, b) => a - b)
+  return {
+    name: chord.label || noteName(root),
+    pcs,
+    triadPcs: intervals.slice(0, 3).map((step) => (root + step) % 12),
   }
 }
 

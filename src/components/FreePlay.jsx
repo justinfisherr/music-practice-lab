@@ -101,6 +101,21 @@ export default function FreePlay({ session, onStartManual }) {
     [view],
   )
 
+  // The literal chords, so a blues or a secondary dominant jams instead of
+  // refusing: the round plays and grades these pitch sets, not a diatonic guess.
+  const jamChords = useMemo(
+    () =>
+      view
+        ? view.cells.map((cell) => ({
+            root: cell.pc,
+            pcs: cell.pcs,
+            quality: cell.quality,
+            label: cell.name,
+          }))
+        : [],
+    [view],
+  )
+
   function clearTune() {
     setPreset(null)
     setKeySource('manual')
@@ -110,7 +125,7 @@ export default function FreePlay({ session, onStartManual }) {
   function jamThese() {
     // Safari needs the unlock inside the click, before anything else.
     unlockAudio()
-    if (!view || !tune?.key || !jamDegrees.length) return
+    if (!view || !tune?.key || !view.cells.length) return
     // Jamming the tune's bars means playing them in the tune's key.
     setKeyId(view.keyId)
     setKeySource('tune')
@@ -118,6 +133,7 @@ export default function FreePlay({ session, onStartManual }) {
       id: trackId,
       name: view.label,
       degrees: jamDegrees,
+      chords: jamChords,
       bpm: tune.tempo?.bpm || 84,
     })
     setAutoStartToken((token) => token + 1)

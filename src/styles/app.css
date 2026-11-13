@@ -6601,18 +6601,12 @@ button.artistcard__hint:focus-visible {
   font-weight: 800;
   letter-spacing: 1px;
 }
-.np__note,
-.np__warn {
+.np__note {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 1.5px;
   line-height: 1.5;
-}
-.np__note {
   color: var(--muted);
-}
-.np__warn {
-  color: var(--signal-ink);
 }
 .np__panel {
   display: grid;

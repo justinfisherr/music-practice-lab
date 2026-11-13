@@ -17,7 +17,9 @@ const SUFFIX = {
 
 const SEVENTH_QUALITY = { maj7: 'maj7', min7: 'min7', dom7: 'dom7', halfDim: 'halfdim7' }
 const TRIAD_QUALITY = { maj: 'maj', min: 'min', dim: 'dim' }
-const INTERVALS = {
+// Also read by the chord-spec changes round, so the grading triad and the
+// playing pitch set cannot drift apart.
+export const INTERVALS = {
   maj7: [0, 4, 7, 11],
   min7: [0, 3, 7, 10],
   dom7: [0, 4, 7, 10],
@@ -39,7 +41,8 @@ function toPcs(pc, quality) {
 
 // Given the tune's key and its chords, the grid the panel renders. Degrees are
 // the relative major's 1..7; a chord outside the key gets no degree and no
-// numeral, which is what disables JAM THESE.
+// numeral, and is marked OUT. That is information, not a veto: JAM plays the
+// literal pitch sets either way.
 export function buildTuneView({ keyPc = 0, mode = 'major', chords = [] } = {}) {
   const tonic = ((Number(keyPc) || 0) % 12 + 12) % 12
   const relative = mode === 'minor' ? (tonic + 3) % 12 : tonic
@@ -82,4 +85,18 @@ export function buildTuneView({ keyPc = 0, mode = 'major', chords = [] } = {}) {
     diatonic: outsideCount === 0,
     outsideCount,
   }
+}
+
+// A measured key that leaves most of the chart outside it is probably the wrong
+// key (a minor tune read a third off). The model's own key replaces it only when
+// it is measurably better; a tie or a worse model key keeps the measurement.
+export function pickTuneKey({ audioKey = null, modelKey = null, chords = [] } = {}) {
+  const bars = Array.isArray(chords) ? chords : []
+  if (!audioKey) return modelKey || null
+  if (!modelKey || !bars.length) return audioKey
+  const outsideFor = (key) =>
+    buildTuneView({ keyPc: key.pc, mode: key.mode, chords: bars }).outsideCount
+  const audioOutside = outsideFor(audioKey)
+  if (audioOutside * 2 <= bars.length) return audioKey
+  return outsideFor(modelKey) < audioOutside ? modelKey : audioKey
 }

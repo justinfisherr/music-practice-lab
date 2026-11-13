@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { MAJOR_KEYS, diatonicSevenths } from './scales.js'
 import { seventhByDegree } from '../session/set.js'
-import { buildTuneView } from './tuneChords.js'
+import { buildTuneView, pickTuneKey } from './tuneChords.js'
 
 const CHART_QUALITY = { halfdim7: 'halfDim' }
 
@@ -119,4 +119,46 @@ test('the flat sixth key renders as F sharp', () => {
   assert.equal(view.keyId, 'Gb')
   assert.equal(view.label, 'F# MAJOR')
   assert.equal(view.relativeOf, null)
+})
+
+test('a diatonic chart is scored lower outside-count under its own key', () => {
+  const chords = seventhChart('C')
+  const inC = buildTuneView({ keyPc: 0, mode: 'major', chords })
+  const inA = buildTuneView({ keyPc: 9, mode: 'major', chords })
+  assert.equal(inC.outsideCount, 0)
+  assert.equal(inA.outsideCount, chords.length)
+  assert.ok(inA.outsideCount > inC.outsideCount)
+})
+
+test('a measured key that leaves most of the chart outside loses to the model key', () => {
+  const chords = seventhChart('C')
+  const audioKey = { pc: 9, mode: 'major' } // A major: every C-major chord is out
+  const modelKey = { pc: 0, mode: 'major' } // C major: none are
+  assert.equal(pickTuneKey({ audioKey, modelKey, chords }), modelKey)
+})
+
+test('the audio key stays when the model key is no better', () => {
+  const chords = seventhChart('C')
+  const audioKey = { pc: 7, mode: 'major' } // G major: half the chart is out
+  const modelKey = { pc: 2, mode: 'major' } // D major: more of it is out
+  assert.equal(pickTuneKey({ audioKey, modelKey, chords }), audioKey)
+})
+
+test('the audio key stays on a tie', () => {
+  // A diminished seventh is outside every major key, so both keys are as bad.
+  const chords = [11, 2, 5, 8].map((pc) => ({ pc, quality: 'dim7' }))
+  const audioKey = { pc: 9, mode: 'major' }
+  const modelKey = { pc: 10, mode: 'major' }
+  const audioView = buildTuneView({ keyPc: 9, mode: 'major', chords })
+  const modelView = buildTuneView({ keyPc: 10, mode: 'major', chords })
+  assert.equal(audioView.outsideCount, modelView.outsideCount)
+  assert.ok(audioView.outsideCount * 2 > chords.length)
+  assert.equal(pickTuneKey({ audioKey, modelKey, chords }), audioKey)
+})
+
+test('with no audio key the model key is used, and with neither there is none', () => {
+  const chords = seventhChart('C')
+  const modelKey = { pc: 0, mode: 'major' }
+  assert.equal(pickTuneKey({ audioKey: null, modelKey, chords }), modelKey)
+  assert.equal(pickTuneKey({ audioKey: null, modelKey: null, chords }), null)
 })
