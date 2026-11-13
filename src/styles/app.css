@@ -1077,10 +1077,17 @@ select {
 }
 /* A held note outside the key reads red in the letter, not just the sector.
    Declared after is-active so it wins on the played chord's own slice. */
+/* A red letter on the red tinted sector is 2.7:1; the paper halo behind the
+   glyph takes it to 6.1:1 without dimming the red. paint-order draws the
+   stroke first so it sits behind the fill, not over it. */
 .fpc__key.is-hit-out,
 .fpc__minor.is-hit-out,
 .fpc__num.is-hit-out {
   fill: var(--signal-ink);
+  stroke: var(--panel);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
 }
 .fpc__hub {
   fill: var(--bg);
