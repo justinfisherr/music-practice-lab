@@ -9,7 +9,8 @@ const ALLOWED = new Set([
   'http://localhost:4173',
 ])
 
-const TOKEN_URL = 'https://accounts.spotify.com/api/token'
+const BROKER_URL =
+  process.env.SPOTIFY_BROKER_URL || 'https://transcribe-xi-virid.vercel.app/api/spotify-token'
 const NOW_URL = 'https://api.spotify.com/v1/me/player/currently-playing'
 const RATE_WINDOW = 60_000
 const RATE_LIMIT = 30
@@ -65,37 +66,30 @@ function state(body) {
   }
 }
 
-async function accessToken({ id, secret, refresh }) {
+// The access token is borrowed from the transcribe app's token broker, the same
+// way every other job on the machine gets one: no Spotify client secret lives in
+// this project, and there is no refresh token here to rotate out from under it.
+async function accessToken(secret) {
   if (cached && cached.expiresAt - Date.now() > 60_000) return { token: cached.value }
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
   try {
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
+    const res = await fetch(BROKER_URL, {
       signal: controller.signal,
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refresh }),
+      headers: { 'x-broker-secret': secret },
     })
     const data = await res.json().catch(() => null)
     if (!res.ok || !data?.access_token) {
-      console.warn('now-playing token', res.status)
+      console.warn('now-playing broker', res.status)
       cached = null
-      return { reason: 'auth' }
-    }
-    // A rotation warning, never the value: the dashboard copy is what a
-    // redeploy needs, and a logged token is a leaked token.
-    if (data.refresh_token && data.refresh_token !== refresh) {
-      console.warn('spotify refresh token rotated')
+      return { reason: res.status === 401 || res.status === 503 ? 'auth' : 'broker_status' }
     }
     const expiresAt = Date.now() + (Number(data.expires_in) || 3600) * 1000
     cached = { value: data.access_token, expiresAt }
     return { token: data.access_token }
   } catch (error) {
-    console.warn('now-playing token', error?.name === 'AbortError' ? 'timeout' : 'error')
+    console.warn('now-playing broker', error?.name === 'AbortError' ? 'timeout' : 'error')
     return { reason: 'auth' }
   } finally {
     clearTimeout(timer)
@@ -142,14 +136,12 @@ export default async function handler(req, res) {
     return res.end(JSON.stringify({ error: 'method_not_allowed' }))
   }
 
-  const id = process.env.SPOTIFY_CLIENT_ID
-  const secret = process.env.SPOTIFY_CLIENT_SECRET
-  const refresh = process.env.SPOTIFY_REFRESH_TOKEN
-  if (!id || !secret || !refresh) return writeJson(res, state({ reason: 'no_token' }))
+  const broker = process.env.SPOTIFY_BROKER_SECRET
+  if (!broker) return writeJson(res, state({ reason: 'no_token' }))
 
   if (rateLimited(req)) return writeJson(res, state({ connected: true, reason: 'rate_limited' }))
 
-  const auth = await accessToken({ id, secret, refresh })
+  const auth = await accessToken(broker)
   if (!auth.token) return writeJson(res, state({ reason: auth.reason || 'auth' }))
 
   const controller = new AbortController()

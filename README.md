@@ -78,25 +78,18 @@ Add more recognizable chords by extending the template list in
 FREE PLAY reads what Spotify is playing and puts the tune's key, tempo and changes
 on screen: the key is selected for you and the chord grid is clickable. It is a
 read of the current track only — **no audio sync, no lyrics, no seek, no account
-UI.** The panel ships dark until these three Production env vars exist in Vercel:
+UI.** The panel ships dark until these two Production env vars exist in Vercel:
 
 ```
-SPOTIFY_CLIENT_ID
-SPOTIFY_CLIENT_SECRET
-SPOTIFY_REFRESH_TOKEN
+SPOTIFY_BROKER_URL      https://transcribe-xi-virid.vercel.app/api/spotify-token
+SPOTIFY_BROKER_SECRET   the same BROKER_SECRET transcribe and the vault jobs use
 ```
 
-Scopes: `user-read-currently-playing` and `user-read-playback-state`. To mint the
-refresh token, add `http://127.0.0.1:8888/callback` as a redirect URI in the
-Spotify dashboard and run:
-
-```bash
-SPOTIFY_CLIENT_ID=… SPOTIFY_CLIENT_SECRET=… node scripts/spotify-auth.mjs
-```
-
-It prints the authorize URL, catches the callback, and prints the refresh token.
-Nothing is written to disk. **Re-run it every 6 months** — Spotify expires refresh
-tokens after six months, and refreshing the access token does not extend that.
+No Spotify client id, secret or refresh token lives in this project. `api/now-playing.js`
+borrows an access token from the transcribe token broker (header `x-broker-secret`), the
+same way the vault's playlist jobs do, and caches it in the lambda for an hour. One
+credential, rotated in one place. If the broker is down the strip says so and nothing
+else in the app cares.
 
 ## MIDI setup
 

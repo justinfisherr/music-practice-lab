@@ -70,7 +70,7 @@ export default function NowPlaying({
         <div className="np__strip">
           <span className="np__word">NOT CONNECTED</span>
           <span className="np__note">SPOTIFY IS NOT CONNECTED</span>
-          <span className="np__note">ADD THE THREE SPOTIFY ENV VARS, THEN REDEPLOY.</span>
+          <span className="np__note">NO SPOTIFY TOKEN. CHECK THE BROKER, THEN REDEPLOY.</span>
         </div>
       ) : !track ? (
         <div className="np__strip">
