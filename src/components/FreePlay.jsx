@@ -87,6 +87,7 @@ export default function FreePlay({ session, onStartManual }) {
             keyId={keyId}
             chord={showing?.kind === 'chord' ? showing : null}
             fn={fn}
+            activeNotes={midi.activeNotes}
           />
         )}
 

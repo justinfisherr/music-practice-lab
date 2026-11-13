@@ -29,7 +29,7 @@ function bandSector(r1, r2, center) {
   return `M ${x1} ${y1} A ${r1} ${r1} 0 0 1 ${x2} ${y2} L ${x3} ${y3} A ${r2} ${r2} 0 0 0 ${x4} ${y4} Z`
 }
 
-export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null }) {
+export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null, activeNotes = [] }) {
   const selected = Math.max(
     0,
     MAJOR_KEYS.findIndex((key) => key.id === keyId),
@@ -37,6 +37,13 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null })
   const marks = diatonicMarks(keyId)
   const active = chord ? sliceForRoot(chord.root, chord.suffix) : null
   const target = targetSlice(fn, keyId)
+  // Same live-note rule as Wheel: a held note fills its own major slice, green
+  // in the selected key and red outside it.
+  const diatonicPcs = [0, 2, 4, 5, 7, 9, 11].map((step) => (MAJOR_KEYS[selected].tonic + step) % 12)
+  const livePcs = new Set((activeNotes || []).map((n) => ((n % 12) + 12) % 12))
+  const liveLabel = livePcs.size
+    ? `, ${livePcs.size} note${livePcs.size === 1 ? '' : 's'} held`
+    : ''
 
   return (
     <div className="fpc">
@@ -46,7 +53,7 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null })
         role="img"
         aria-label={`Circle of fifths in ${keyDisplay(keyId)} major${
           chord ? `, highlighting ${chord.name}` : ''
-        }`}
+        }${liveLabel}`}
       >
         <circle cx={CX} cy={CY} r={R_OUT + 6} className="fpc__rim" />
 
@@ -57,6 +64,9 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null })
           const targetOuter = target?.index === index && target.ring === 'outer'
           const targetInner = target?.index === index && target.ring === 'inner'
           const mark = marks.get(index) || {}
+          const tonic = ((key.tonic % 12) + 12) % 12
+          const held = livePcs.has(tonic)
+          const hit = held ? (diatonicPcs.includes(tonic) ? ' is-hit' : ' is-hit-out') : ''
 
           const [mx, my] = polar(R_OUT_LABEL, center)
           const [nx, ny] = polar(R_OUT_NUM, center)
@@ -67,7 +77,7 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null })
             <g key={key.id}>
               <path
                 d={bandSector(R_OUT, R_OUT_IN, center)}
-                className={`fpc__slice${activeOuter ? ' is-active' : ''}${
+                className={`fpc__slice${activeOuter ? ' is-active' : ''}${hit}${
                   targetOuter ? ' is-target' : ''
                 }`}
               />

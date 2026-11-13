@@ -77,6 +77,38 @@ function chordName(root, suffix) {
   return `${noteName(root)}${suffix}`
 }
 
+// One-note-short voicings get named by what's absent. Keep the label set small
+// and obvious; an unmapped interval means we decline to name the chord.
+const MISSING_DEGREE = {
+  2: '9TH',
+  3: 'b3RD',
+  4: '3RD',
+  5: '11TH',
+  6: 'b5TH',
+  7: '5TH',
+  8: '#5TH',
+  9: '6TH',
+  10: 'b7TH',
+  11: 'MAJ7TH',
+}
+
+// Every root/suffix whose full set is the held set plus exactly one note.
+function matchMissingOne(pcs) {
+  const held = new Set(pcs)
+  const candidates = []
+  for (const template of TEMPLATES) {
+    const size = new Set(template.intervals).size
+    if (size !== pcs.length + 1) continue
+    for (let root = 0; root < 12; root++) {
+      const templatePcs = [...new Set(template.intervals.map((i) => (root + i) % 12))]
+      if (!pcs.every((pc) => templatePcs.includes(pc))) continue
+      const missing = templatePcs.find((pc) => !held.has(pc))
+      candidates.push({ root, suffix: template.suffix, missing: (missing - root + 12) % 12 })
+    }
+  }
+  return candidates
+}
+
 // Identify what a set of held MIDI notes spells.
 // Returns a display-ready object:
 //   { kind: 'empty' }
@@ -110,13 +142,35 @@ export function analyzeNotes(notes) {
   }
 
   const matches = matchChords(pcs)
-  if (matches.length === 0) {
-    return { kind: 'unknown', notes: noteLabels, pcs }
-  }
 
   // Prefer the interpretation rooted on the bass note (i.e. root position);
   // otherwise take the first match and mark it as a slash chord.
   const rootMatch = matches.find((m) => m.root === bassPc)
+
+  // No root-position spelling, but the held notes are one tone short of one:
+  // name that partial voicing instead of reporting an inversion or nothing,
+  // provided exactly one such reading exists.
+  if (!rootMatch) {
+    const near = matchMissingOne(pcs).filter((m) => m.root === bassPc)
+    const degree = near.length === 1 ? MISSING_DEGREE[near[0].missing] : null
+    if (degree) {
+      return {
+        kind: 'chord',
+        name: `${chordName(near[0].root, near[0].suffix)} (NO ${degree})`,
+        equivalents: [],
+        notes: noteLabels,
+        pcs,
+        root: near[0].root,
+        suffix: near[0].suffix,
+        bass: bassPc,
+      }
+    }
+  }
+
+  if (matches.length === 0) {
+    return { kind: 'unknown', notes: noteLabels, pcs }
+  }
+
   const primary = rootMatch || matches[0]
   let name = chordName(primary.root, primary.suffix)
   if (primary.root !== bassPc) name += `/${noteName(bassPc)}`

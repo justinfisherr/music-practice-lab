@@ -1026,6 +1026,18 @@ select {
 .fpc__slice.is-active {
   fill: var(--ink);
 }
+/* Held note: in key = ok, outside = signal. Same colours as .wheel__sector.is-hit,
+   declared after .is-active so a lit slice beats the played-chord ink. */
+.fpc__slice.is-hit {
+  fill: color-mix(in srgb, var(--ok) 34%, var(--panel));
+  stroke: var(--ok);
+  stroke-width: 5;
+}
+.fpc__slice.is-hit-out {
+  fill: color-mix(in srgb, var(--signal) 34%, var(--panel));
+  stroke: var(--signal);
+  stroke-width: 5;
+}
 .fpc__slice.is-target {
   stroke: var(--signal-ink);
   stroke-width: 3;
