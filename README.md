@@ -73,6 +73,31 @@ equivalents. The last thing you played stays on screen after you lift your hands
 Add more recognizable chords by extending the template list in
 `src/data/chordDictionary.js` — the matcher is generic.
 
+## Now Playing (Spotify)
+
+FREE PLAY reads what Spotify is playing and puts the tune's key, tempo and changes
+on screen: the key is selected for you and the chord grid is clickable. It is a
+read of the current track only — **no audio sync, no lyrics, no seek, no account
+UI.** The panel ships dark until these three Production env vars exist in Vercel:
+
+```
+SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET
+SPOTIFY_REFRESH_TOKEN
+```
+
+Scopes: `user-read-currently-playing` and `user-read-playback-state`. To mint the
+refresh token, add `http://127.0.0.1:8888/callback` as a redirect URI in the
+Spotify dashboard and run:
+
+```bash
+SPOTIFY_CLIENT_ID=… SPOTIFY_CLIENT_SECRET=… node scripts/spotify-auth.mjs
+```
+
+It prints the authorize URL, catches the callback, and prints the refresh token.
+Nothing is written to disk. **Re-run it every 6 months** — Spotify expires refresh
+tokens after six months, and refreshing the access token does not extend that.
+
 ## MIDI setup
 
 1. Plug in a USB MIDI keyboard.

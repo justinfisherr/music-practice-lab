@@ -6552,3 +6552,294 @@ button.artistcard__hint:focus-visible {
 .scalelab__wheel .wheel__stage {
   max-width: 280px;
 }
+
+/* ---- Now playing: the tune on Spotify, read in the app's key ---- */
+.np {
+  display: grid;
+  min-width: 0;
+  margin: 16px 0;
+  border: 3px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.np__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 3px solid var(--line);
+}
+.np__title {
+  margin: 0;
+  font-size: clamp(18px, 5vw, 24px);
+  line-height: 1;
+  letter-spacing: 1px;
+}
+.np__connected,
+.np__stamp {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  font-variant-numeric: tabular-nums;
+}
+.np__stamp.is-stale {
+  color: var(--signal-ink);
+}
+.np__refresh {
+  margin-left: auto;
+  min-height: 44px;
+}
+.np__strip {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+.np__word {
+  font-size: clamp(18px, 5vw, 22px);
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.np__note,
+.np__warn {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  line-height: 1.5;
+}
+.np__note {
+  color: var(--muted);
+}
+.np__warn {
+  color: var(--signal-ink);
+}
+.np__panel {
+  display: grid;
+  min-width: 0;
+}
+.np__track {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border-bottom: 3px solid var(--line);
+}
+.np__art {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  border: 3px solid var(--line);
+  background: var(--field);
+  object-fit: cover;
+}
+.np__art--none {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.np__id {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+.np__state {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.np__ttl,
+.np__artist,
+.np__album {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.np__ttl {
+  font-size: 16px;
+  font-weight: 800;
+}
+.np__artist {
+  font-size: 13px;
+  font-weight: 700;
+}
+.np__album {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.np__clock {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.np__keyband,
+.np__gridband {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+.np__keyband {
+  border-bottom: 3px solid var(--line);
+}
+.np__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.np__label,
+.np__unit {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.np__keychip {
+  border: 3px solid var(--line);
+  background: var(--field);
+  color: var(--ink);
+  padding: 2px 8px;
+  font-size: clamp(20px, 4.5vw, 30px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.np__keychip--wait,
+.np__keychip--none {
+  font-size: clamp(13px, 3.2vw, 16px);
+  letter-spacing: 1.5px;
+}
+.np__keychip--wait {
+  color: var(--muted);
+}
+.np__keychip--none {
+  border-style: dashed;
+  color: var(--signal-ink);
+}
+.np__tempchip {
+  border: 2px solid var(--line);
+  background: var(--field);
+  padding: 2px 8px;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.np__prov {
+  border: 2px solid var(--line);
+  padding: 2px 6px;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.np__prov.is-guessed {
+  border-style: dashed;
+  border-color: var(--due);
+  color: var(--due);
+}
+.np__pick {
+  min-height: 44px;
+  margin-left: auto;
+}
+.np__tuneline {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.np__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.np__actions .btn {
+  flex: 1 1 160px;
+  min-height: 44px;
+}
+
+/* ---- Tune grid: the bars, as buttons ---- */
+.tunegrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 1px;
+  min-width: 0;
+  border: 3px solid var(--line);
+  background: var(--line);
+}
+.tunegrid__cell {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 2px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-stamp) var(--ease-snap);
+}
+.tunegrid__cell:active {
+  background: var(--field);
+}
+.tunegrid__cell.is-out {
+  border-left: 3px solid var(--signal);
+}
+.tunegrid__cell.is-skeleton {
+  background: var(--neutral-soft);
+  cursor: default;
+}
+.tunegrid__numeral {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  font-variant-numeric: tabular-nums;
+}
+.tunegrid__cell.is-out .tunegrid__numeral {
+  color: var(--signal-ink);
+  font-size: 9px;
+}
+.tunegrid__name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Jam panel: a tune preset replaces the progression picker ---- */
+.jamfield__tune {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.jamfield__tunename {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

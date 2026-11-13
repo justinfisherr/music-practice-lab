@@ -1,14 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useChangesRound } from '../hooks/useChangesRound.js'
-import { buildJamDegrees, chordLabel, PLAY_CHANGES } from '../session/set.js'
+import { buildJamDegrees, chordLabel, PLAY_CHANGES, repeatDegrees } from '../session/set.js'
 import { keyDisplay } from '../data/scales.js'
 
 // FREE PLAY: the same 30-second changes round as the set. The backing loops
 // after the bell for practice; the round records to the shared local store.
-export default function JamPanel({ keyId }) {
-  const [changesId, setChangesId] = useState('turnaround')
+// A tune preset (`{id,name,degrees,bpm}`) replaces the named progression: the
+// degrees are the tune's bars, and its id is the round's save bucket.
+export default function JamPanel({
+  keyId,
+  preset = null,
+  autoStartToken = 0,
+  onPhaseChange,
+  onClearTune,
+}) {
+  const [manualChangesId, setManualChangesId] = useState('turnaround')
   const [barsPerChord, setBarsPerChord] = useState(1)
   const [bpm, setBpm] = useState(84)
+
+  const changesId = preset ? `tune:${preset.id}` : manualChangesId
+  const degrees = preset ? repeatDegrees(preset.degrees, barsPerChord) : null
 
   const changes = useChangesRound({
     keyId,
@@ -16,15 +27,36 @@ export default function JamPanel({ keyId }) {
     barsPerChord,
     bpm,
     roundSeconds: 30,
+    degrees,
   })
 
+  // A tune's tempo can sit outside the manual 70-100 window; the track meets it.
+  const tempoFloor = Math.min(70, preset?.bpm ?? 70)
+  const tempoCeil = Math.max(100, preset?.bpm ?? 100)
+
+  useEffect(() => {
+    if (preset?.bpm) setBpm(preset.bpm)
+  }, [preset?.id, preset?.bpm])
+
+  useEffect(() => {
+    onPhaseChange?.(changes.phase)
+  }, [changes.phase, onPhaseChange])
+
   const busy = changes.phase !== 'idle'
+
+  // The token is the trigger: re-running on `busy` would start a round every
+  // time one ended.
+  useEffect(() => {
+    if (autoStartToken && !busy) void changes.start()
+  }, [autoStartToken]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const position = changes.position
   const chord = position ? chordLabel(keyId, position.degree) : '—'
-  const changesName =
-    PLAY_CHANGES.find((entry) => entry.id === (changes.round?.changesId || changesId))?.name ||
-    'turnaround'
-  const preview = buildJamDegrees(changesId, barsPerChord)
+  const changesName = preset
+    ? preset.name
+    : PLAY_CHANGES.find((entry) => entry.id === (changes.round?.changesId || changesId))?.name ||
+      'turnaround'
+  const preview = preset ? degrees : buildJamDegrees(changesId, barsPerChord)
   const report = changes.round || changes.live
 
   return (
@@ -37,21 +69,38 @@ export default function JamPanel({ keyId }) {
       </div>
 
       <div className="jampanel__controls">
-        <label className="jamfield">
-          <span className="jamfield__label">PROGRESSION</span>
-          <select
-            className="jamfield__select"
-            value={changesId}
-            onChange={(event) => setChangesId(event.target.value)}
-            disabled={busy}
-          >
-            {PLAY_CHANGES.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {preset ? (
+          <div className="jamfield">
+            <span className="jamfield__label">PROGRESSION</span>
+            <div className="jamfield__tune">
+              <span className="jamfield__tunename">{preset.name}</span>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={onClearTune}
+                disabled={!onClearTune}
+              >
+                CLEAR TUNE
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className="jamfield">
+            <span className="jamfield__label">PROGRESSION</span>
+            <select
+              className="jamfield__select"
+              value={manualChangesId}
+              onChange={(event) => setManualChangesId(event.target.value)}
+              disabled={busy}
+            >
+              {PLAY_CHANGES.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div className="jamfield">
           <span className="jamfield__label">BARS PER CHORD</span>
@@ -76,8 +125,8 @@ export default function JamPanel({ keyId }) {
           <input
             type="range"
             className="jamrange"
-            min="70"
-            max="100"
+            min={tempoFloor}
+            max={tempoCeil}
             step="1"
             value={bpm}
             onChange={(event) => setBpm(Number(event.target.value))}

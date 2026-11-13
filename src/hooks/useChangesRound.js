@@ -31,6 +31,7 @@ export function useChangesRound({
   barsPerChord,
   bpm = 84,
   roundSeconds = CHANGES_ROUND_SECONDS,
+  degrees = null,
   onRoundEnd,
 }) {
   const [phase, setPhase] = useState('idle')
@@ -52,10 +53,10 @@ export function useChangesRound({
   const previousMidiRef = useRef(null)
   const roundEndRef = useRef(0)
   const keyRef = useRef(keyId)
-  const paramsRef = useRef({ changesId, barsPerChord, bpm, roundSeconds })
+  const paramsRef = useRef({ changesId, barsPerChord, bpm, roundSeconds, degrees })
   const onRoundEndRef = useRef(onRoundEnd)
   keyRef.current = keyId
-  paramsRef.current = { changesId, barsPerChord, bpm, roundSeconds }
+  paramsRef.current = { changesId, barsPerChord, bpm, roundSeconds, degrees }
   onRoundEndRef.current = onRoundEnd
 
   const clearPending = useCallback(() => {
@@ -220,10 +221,10 @@ export function useChangesRound({
     unlockAudio()
     stopInternal()
     resetStats()
-    degreesRef.current = buildJamDegrees(
-      paramsRef.current.changesId,
-      paramsRef.current.barsPerChord,
-    )
+    // A tune preset brings its own progression; otherwise the named one.
+    degreesRef.current = paramsRef.current.degrees?.length
+      ? paramsRef.current.degrees
+      : buildJamDegrees(paramsRef.current.changesId, paramsRef.current.barsPerChord)
     const token = tokenRef.current
     setPhase('countin')
     await playCountIn(paramsRef.current.bpm)

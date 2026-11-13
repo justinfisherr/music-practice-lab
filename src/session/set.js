@@ -37,10 +37,16 @@ export const PLAY_CHANGES = [
   { id: 'turnaround', name: 'turnaround', degrees: [1, 6, 2, 5] },
 ]
 
+// Each degree held for a run of bars. A tune preset repeats its own degrees
+// through here, so both transports read the bar length the same way.
+export function repeatDegrees(degrees, barsPerChord = 1) {
+  const repeats = [1, 2, 4].includes(barsPerChord) ? barsPerChord : 1
+  return (Array.isArray(degrees) ? degrees : []).flatMap((degree) => Array(repeats).fill(degree))
+}
+
 export function buildJamDegrees(id, barsPerChord = 1) {
   const changes = PLAY_CHANGES.find((entry) => entry.id === id) || PLAY_CHANGES.at(-1)
-  const repeats = [1, 2, 4].includes(barsPerChord) ? barsPerChord : 1
-  return changes.degrees.flatMap((degree) => Array(repeats).fill(degree))
+  return repeatDegrees(changes.degrees, barsPerChord)
 }
 export const LAND_WINDOW_MS = 180
 
