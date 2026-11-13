@@ -1,4 +1,5 @@
 import { keyDisplay } from '../data/scales.js'
+import { keyLabel } from '../data/tuneChords.js'
 import TuneGrid from './TuneGrid.jsx'
 
 // What Spotify is playing, read in the app's key, with the tune's changes in a
@@ -34,10 +35,12 @@ export default function NowPlaying({
   const track = data?.track || null
   const connected = Boolean(data?.connected)
   const tuneKey = tune?.key || null
+  const keyed = Boolean(tuneKey)
+  const tuneLabel = tuneKey ? keyLabel(tuneKey) : null
   const tempo = tune?.tempo || null
   const cells = view?.cells || []
   const applied = keySource === 'tune'
-  const notApplied = Boolean(track && keySource === 'manual' && overriddenTrack === track.id)
+  const notApplied = Boolean(keyed && track && keySource === 'manual' && overriddenTrack === track.id)
   const jamRunning = Boolean(jamPhase && jamPhase !== 'idle')
   // A chart is jammable in any key: the round plays the literal chords, and the
   // OUT marks are information, not a veto.
@@ -104,8 +107,8 @@ export default function NowPlaying({
               <span className="np__label">KEY</span>
               {analyzing ? (
                 <span className="np__keychip np__keychip--wait">ANALYZING</span>
-              ) : tuneKey && view ? (
-                <span className="np__keychip">{view.label}</span>
+              ) : keyed ? (
+                <span className="np__keychip">{tuneLabel.label}</span>
               ) : (
                 <span className="np__keychip np__keychip--none">KEY UNKNOWN</span>
               )}
@@ -116,7 +119,7 @@ export default function NowPlaying({
                   {tuneKey.source === 'audio' ? 'KEY MEASURED' : 'KEY GUESSED'}
                 </span>
               ) : null}
-              {applied && view ? (
+              {applied && keyed ? (
                 <button type="button" className="btn btn--ghost np__pick" onClick={onClearTune}>
                   PICK MY OWN
                 </button>
@@ -136,18 +139,23 @@ export default function NowPlaying({
               ) : null}
             </div>
 
-            {!analyzing && applied && view ? (
+            {!analyzing && applied && keyed ? (
               <span className="np__tuneline">
                 {`KEY FROM TUNE · ${keyDisplay(keyId)} MAJOR${
-                  view.mode === 'minor' ? ` (${view.label})` : ''
+                  tuneKey.mode === 'minor' ? ` (${tuneLabel.label})` : ''
                 }`}
               </span>
             ) : notApplied ? (
               <span className="np__tuneline">KEY FROM TUNE · NOT APPLIED</span>
             ) : null}
 
-            {!analyzing && !tuneKey ? (
-              <span className="np__note">THE AUDIO HAD NO KEY AND THE MODEL DIDN'T GUESS ONE.</span>
+            {!analyzing && !keyed ? (
+              <span className="np__note">
+                THE AUDIO HAD NO KEY AND THE MODEL DIDN'T GUESS ONE.
+                {cells.length
+                  ? ` THE GRID READS IN ${keyDisplay(keyId)} MAJOR.`
+                  : ''}
+              </span>
             ) : null}
           </div>
 
@@ -165,7 +173,11 @@ export default function NowPlaying({
               ) : null}
             </div>
 
-            {analyzing ? <TuneGrid skeleton={8} /> : cells.length ? <TuneGrid cells={cells} /> : null}
+            {analyzing ? (
+              <TuneGrid skeleton={8} />
+            ) : cells.length ? (
+              <TuneGrid cells={cells} keyed={keyed} />
+            ) : null}
 
             {!analyzing && !cells.length ? (
               <span className="np__note">

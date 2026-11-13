@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { MAJOR_KEYS, diatonicSevenths } from './scales.js'
+import { MAJOR_KEYS, diatonicSevenths, keyDisplay } from './scales.js'
 import { seventhByDegree } from '../session/set.js'
-import { buildTuneView, pickTuneKey } from './tuneChords.js'
+import { buildTuneView, keyLabel, pickTuneKey } from './tuneChords.js'
 
 const CHART_QUALITY = { halfdim7: 'halfDim' }
 
@@ -161,4 +161,40 @@ test('with no audio key the model key is used, and with neither there is none', 
   const modelKey = { pc: 0, mode: 'major' }
   assert.equal(pickTuneKey({ audioKey: null, modelKey, chords }), modelKey)
   assert.equal(pickTuneKey({ audioKey: null, modelKey: null, chords }), null)
+})
+
+// The panel labels a key with no chart at all, so the label is its own function.
+test('keyLabel names all twelve majors with no chart', () => {
+  for (const key of MAJOR_KEYS) {
+    const label = keyLabel({ pc: key.tonic, mode: 'major' })
+    assert.equal(label.keyId, key.id)
+    assert.equal(label.label, `${keyDisplay(key.id)} MAJOR`)
+    assert.equal(label.relativeOf, null)
+    assert.equal(label.mode, 'major')
+  }
+})
+
+test('keyLabel names a minor tune and its relative major', () => {
+  const label = keyLabel({ pc: 9, mode: 'minor' })
+  assert.equal(label.keyId, 'C')
+  assert.equal(label.label, 'A MINOR')
+  assert.equal(label.relativeOf, 'RELATIVE OF C')
+})
+
+test('keyLabel accepts the tune shape it is handed', () => {
+  // A tune's key arrives as {pc, mode, source}; the extras are ignored.
+  assert.deepEqual(keyLabel({ pc: 3, mode: 'major', source: 'audio' }), keyLabel({ pc: 3 }))
+  assert.equal(keyLabel({ pc: 3, source: 'audio' }).label, 'Eb MAJOR')
+})
+
+test('buildTuneView labels through keyLabel', () => {
+  for (const mode of ['major', 'minor']) {
+    for (const key of MAJOR_KEYS) {
+      const view = buildTuneView({ keyPc: key.tonic, mode, chords: seventhChart(key.id) })
+      const label = keyLabel({ pc: key.tonic, mode })
+      assert.equal(view.label, label.label)
+      assert.equal(view.keyId, label.keyId)
+      assert.equal(view.relativeOf, label.relativeOf)
+    }
+  }
 })

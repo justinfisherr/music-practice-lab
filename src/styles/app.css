@@ -6638,8 +6638,12 @@ button.artistcard__hint:focus-visible {
 }
 .np__id {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   flex: 1 1 auto;
   gap: 2px;
+  min-width: 0;
+}
+.np__id > * {
   min-width: 0;
 }
 .np__state {
@@ -6794,6 +6798,11 @@ button.artistcard__hint:focus-visible {
 .tunegrid__cell.is-out {
   border-left: 3px solid var(--signal);
 }
+/* The press flip: ink for a stamped beat, so a muted device still confirms. */
+.tunegrid__cell.is-sounding {
+  background: var(--ink);
+  color: var(--bg);
+}
 .tunegrid__cell.is-skeleton {
   background: var(--neutral-soft);
   cursor: default;
@@ -6818,6 +6827,10 @@ button.artistcard__hint:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.tunegrid__cell.is-sounding .tunegrid__numeral,
+.tunegrid__cell.is-sounding .tunegrid__name {
+  color: var(--bg);
 }
 
 /* ---- Jam panel: a tune preset replaces the progression picker ---- */

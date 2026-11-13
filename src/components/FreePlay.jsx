@@ -4,7 +4,7 @@ import { useNowPlaying } from '../hooks/useNowPlaying.js'
 import { analyzeNotes } from '../data/chordDictionary.js'
 import { analyzeFunction } from '../data/chordFunction.js'
 import { keyById, MAJOR_KEYS, keyDisplay } from '../data/scales.js'
-import { buildTuneView } from '../data/tuneChords.js'
+import { buildTuneView, keyLabel } from '../data/tuneChords.js'
 import { unlockAudio } from '../session/audio.js'
 import MidiConnection from './MidiConnection.jsx'
 import FreePlayCircle from './FreePlayCircle.jsx'
@@ -83,14 +83,17 @@ export default function FreePlay({ session, onStartManual }) {
 
   // The tune sets the key unless the player picked one for this track. The
   // override is stamped with the track, so the next tune may set the key again.
+  // A measured key needs no chart, so this keys off the tune's key alone.
+  const tuneKey = tune?.key || null
+  const tuneLabel = useMemo(() => (tuneKey ? keyLabel(tuneKey) : null), [tuneKey])
   const [keySource, setKeySource] = useState('manual')
   const [overriddenTrack, setOverriddenTrack] = useState(null)
   useEffect(() => {
-    if (!view) return
+    if (!tuneLabel) return
     if (keySource === 'manual' && overriddenTrack === trackId) return
-    setKeyId(view.keyId)
+    setKeyId(tuneLabel.keyId)
     setKeySource('tune')
-  }, [view, trackId, keySource, overriddenTrack])
+  }, [tuneLabel, trackId, keySource, overriddenTrack])
 
   const [preset, setPreset] = useState(null)
   const [autoStartToken, setAutoStartToken] = useState(0)

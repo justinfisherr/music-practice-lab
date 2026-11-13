@@ -39,16 +39,30 @@ function toPcs(pc, quality) {
   return [...new Set(intervals.map((step) => (pc + step) % 12))].sort((a, b) => a - b)
 }
 
+// A measured key is useful without a chart, so the label reads from the key
+// alone. A minor tune resolves to its relative major for the grid and the
+// selector; the label keeps the minor's own name.
+export function keyLabel({ pc = 0, mode = 'major' } = {}) {
+  const tonic = (((Number(pc) || 0) % 12) + 12) % 12
+  const minor = mode === 'minor'
+  const relative = minor ? (tonic + 3) % 12 : tonic
+  const key = MAJOR_KEYS.find((entry) => entry.tonic === relative) || MAJOR_KEYS[0]
+  return {
+    keyId: key.id,
+    mode: minor ? 'minor' : 'major',
+    label: minor ? `${keyById(key.id).scale[5]} MINOR` : `${keyDisplay(key.id)} MAJOR`,
+    relativeOf: minor ? `RELATIVE OF ${keyDisplay(key.id)}` : null,
+  }
+}
+
 // Given the tune's key and its chords, the grid the panel renders. Degrees are
 // the relative major's 1..7; a chord outside the key gets no degree and no
 // numeral, and is marked OUT. That is information, not a veto: JAM plays the
 // literal pitch sets either way.
 export function buildTuneView({ keyPc = 0, mode = 'major', chords = [] } = {}) {
-  const tonic = ((Number(keyPc) || 0) % 12 + 12) % 12
-  const relative = mode === 'minor' ? (tonic + 3) % 12 : tonic
-  const key = MAJOR_KEYS.find((entry) => entry.tonic === relative) || MAJOR_KEYS[0]
-  const sevenths = diatonicSevenths(key.id)
-  const triads = diatonicChords(key.id)
+  const { keyId, label, relativeOf } = keyLabel({ pc: keyPc, mode })
+  const sevenths = diatonicSevenths(keyId)
+  const triads = diatonicChords(keyId)
 
   const cells = (Array.isArray(chords) ? chords : []).map((chord, index) => {
     const pc = ((Number(chord?.pc) || 0) % 12 + 12) % 12
@@ -74,13 +88,10 @@ export function buildTuneView({ keyPc = 0, mode = 'major', chords = [] } = {}) {
 
   const outsideCount = cells.filter((cell) => cell.outside).length
   return {
-    keyId: key.id,
+    keyId,
     mode,
-    label:
-      mode === 'minor'
-        ? `${keyById(key.id).scale[5]} MINOR`
-        : `${keyDisplay(key.id)} MAJOR`,
-    relativeOf: mode === 'minor' ? `RELATIVE OF ${keyDisplay(key.id)}` : null,
+    label,
+    relativeOf,
     cells,
     diatonic: outsideCount === 0,
     outsideCount,
