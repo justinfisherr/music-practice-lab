@@ -67,6 +67,13 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null, a
           const tonic = ((key.tonic % 12) + 12) % 12
           const held = livePcs.has(tonic)
           const hit = held ? (diatonicPcs.includes(tonic) ? ' is-hit' : ' is-hit-out') : ''
+          // The inner ring's tonic is this key's relative minor, so it hits on its own note.
+          const minorTonic = (tonic + 9) % 12
+          const minorHit = livePcs.has(minorTonic)
+            ? diatonicPcs.includes(minorTonic)
+              ? ' is-hit'
+              : ' is-hit-out'
+            : ''
 
           const [mx, my] = polar(R_OUT_LABEL, center)
           const [nx, ny] = polar(R_OUT_NUM, center)
@@ -93,7 +100,7 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null, a
                 y={my}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                className={`fpc__key${activeOuter ? ' is-active' : ''}`}
+                className={`fpc__key${activeOuter ? ' is-active' : ''}${hit}`}
               >
                 {keyDisplay(key.id)}
               </text>
@@ -103,7 +110,7 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null, a
                   y={ny}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  className={`fpc__num${activeOuter ? ' is-active' : ''}`}
+                  className={`fpc__num${activeOuter ? ' is-active' : ''}${hit}`}
                 >
                   {mark.outer}
                 </text>
@@ -114,7 +121,7 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null, a
                 y={iy}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                className={`fpc__minor${activeInner ? ' is-active' : ''}`}
+                className={`fpc__minor${activeInner ? ' is-active' : ''}${minorHit}`}
               >
                 {key.scale[5]}m
               </text>
@@ -124,7 +131,7 @@ export default function FreePlayCircle({ keyId = 'C', chord = null, fn = null, a
                   y={py}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  className={`fpc__num fpc__num--inner${activeInner ? ' is-active' : ''}`}
+                  className={`fpc__num fpc__num--inner${activeInner ? ' is-active' : ''}${minorHit}`}
                 >
                   {mark.inner}
                 </text>
