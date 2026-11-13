@@ -6798,10 +6798,12 @@ button.artistcard__hint:focus-visible {
 .tunegrid__cell.is-out {
   border-left: 3px solid var(--signal);
 }
-/* The press flip: ink for a stamped beat, so a muted device still confirms. */
+/* The press flip: ink for a stamped beat, so a muted device still confirms.
+   It snaps in and fades back out over --t-stamp. */
 .tunegrid__cell.is-sounding {
   background: var(--ink);
   color: var(--bg);
+  transition: none;
 }
 .tunegrid__cell.is-skeleton {
   background: var(--neutral-soft);
