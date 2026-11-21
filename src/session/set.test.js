@@ -387,6 +387,8 @@ test('PLAY_CHANGES exposes the playable progressions', () => {
       'i-vi-iv-v',
       'i-v-vi-iii-iv',
       'ii-v-i',
+      'ii-v-i-iv',
+      'ii-v-i-relative-minor',
       'iii-vi-ii-v-i',
       'vii-iii-vi',
       'blues-12',

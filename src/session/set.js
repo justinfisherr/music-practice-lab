@@ -31,6 +31,10 @@ export const PLAY_CHANGES = [
   { id: 'i-vi-iv-v', name: '1-6-4-5', degrees: [1, 6, 4, 5] },
   { id: 'i-v-vi-iii-iv', name: '1-5-6-3-4', degrees: [1, 5, 6, 3, 4] },
   { id: 'ii-v-i', name: '2-5-1', degrees: [2, 5, 1] },
+  { id: 'ii-v-i-iv', name: '2-5-1-4', degrees: [2, 5, 1, 4] },
+  // ii-V that resolves to the relative minor (vi) instead of home: a deceptive
+  // cadence. The "1" of the relative minor is scale degree 6 of the major key.
+  { id: 'ii-v-i-relative-minor', name: '2-5-1 relative minor', degrees: [2, 5, 6] },
   { id: 'iii-vi-ii-v-i', name: '3-6-2-5-1', degrees: [3, 6, 2, 5, 1] },
   { id: 'vii-iii-vi', name: '7-3-6', degrees: [7, 3, 6] },
   { id: 'blues-12', name: '12-bar blues', degrees: BLUES_DEGREES },
