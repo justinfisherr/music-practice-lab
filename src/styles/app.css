@@ -6458,9 +6458,10 @@ button.artistcard__hint:focus-visible {
 }
 .chordmeter__numeral {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 .chordmeter.is-current {
   background: var(--accent-soft);
@@ -6501,6 +6502,39 @@ button.artistcard__hint:focus-visible {
   .chordmeter__fill {
     transition: none;
   }
+}
+
+/* ---- progressions: tempo, beat lights, and the chord chart ---- */
+.progtempo {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.progtempo__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+}
+.progtempo__range {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--signal);
+}
+.progbeats {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.progbeat {
+  flex: 1;
+  height: 10px;
+  border: 2px solid var(--line);
+  background: var(--bg);
+}
+.progbeat.is-on {
+  background: var(--signal);
+  border-color: var(--signal);
 }
 
 /* ---- Scale Lab: three homes on one page ---- */

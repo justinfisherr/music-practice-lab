@@ -16,6 +16,7 @@ export function createTransport({
   bpm = 80,
   degrees = TURNAROUND_DEGREES,
   chords = null,
+  startAt = null,
   onBeat,
   onChord,
   onEnd,
@@ -82,7 +83,7 @@ export function createTransport({
 
   function scheduleAudio() {
     if (!context || muted) return
-    audioStart = context.currentTime + 0.06
+    audioStart = startAt != null ? startAt : context.currentTime + 0.06
     for (let bar = 0; bar < bars; bar++) {
       const degree = progression[bar]
       const spec = specs ? specs[bar] : null
@@ -150,9 +151,13 @@ export function createTransport({
     ended = false
     lastBeat = -1
     lastBar = -1
-    startedAt = performance.now()
-    running = true
     await unlockAudio()
+    // The visual clock starts when the audio does, so a bar's downbeat and its
+    // click land together. `startAt` lets a count-in hand the loop an exact
+    // audio time; without it the audio leads by 60ms.
+    const lead = startAt != null && context ? Math.max(0, (startAt - context.currentTime) * 1000) : 60
+    startedAt = performance.now() + lead
+    running = true
     scheduleAudio()
     timer = setInterval(tick, 25)
     tick()
@@ -213,6 +218,11 @@ export function createTransport({
     },
     audioTime() {
       return context ? context.currentTime : 0
+    },
+    // The audio time the loop ends. A looping drill starts the next pass here
+    // so the band never gaps between passes.
+    endAt() {
+      return audioStart ? audioStart + totalMs / 1000 : null
     },
     get currentChordIndex() {
       return current().chordIndex

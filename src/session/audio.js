@@ -84,12 +84,14 @@ export function playChord(pcs, { duration = 0.7 } = {}) {
 
 // Four quiet square clicks, then resolve one bar later. The caller shows a
 // COUNT IN state and starts the transport on the first click of the next bar.
-// When sound is off we still wait, so the timing stays the same.
+// When sound is off we still wait, so the timing stays the same. Returns the
+// audio time of the next bar so a transport can start exactly on it.
 export async function playCountIn(bpm = 80, beats = 4) {
   const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 80
   const count = Number.isFinite(beats) ? Math.max(1, Math.floor(beats)) : 4
   const gapMs = 60000 / safeBpm
   const audio = getContext()
+  let nextAt = null
   if (soundOn && audio) {
     try {
       if (audio.state !== 'running') audio.resume().catch(() => {})
@@ -108,11 +110,13 @@ export async function playCountIn(bpm = 80, beats = 4) {
         osc.start(at)
         osc.stop(at + 0.08)
       }
+      nextAt = t0 + (count * gapMs) / 1000
     } catch {
       // audio can be blocked without a gesture; the wait still keeps time
     }
   }
-  await new Promise((resolve) => setTimeout(resolve, gapMs * count + 60))
+  await new Promise((resolve) => setTimeout(resolve, gapMs * count + 40))
+  return nextAt
 }
 
 // Wrong-key buzz: two low squares a semitone apart, 160ms. Never longer than

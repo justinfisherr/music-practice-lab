@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNoteSequence } from '../hooks/useNoteSequence.js'
 import { gradeSequence } from '../session/grade.js'
-import { playChord, playPhrase, SILENT_HINT, unlockAudio } from '../session/audio.js'
+import {
+  isMuted,
+  playChord,
+  playCountIn,
+  playPhrase,
+  SILENT_HINT,
+  unlockAudio,
+} from '../session/audio.js'
+import { createTransport } from '../session/transport.js'
+import { scoreChangeChord, targetForDegree } from '../session/changes.js'
 import { noteName } from '../data/diminishedChords.js'
 import { keyDisplay } from '../data/scales.js'
 import {
@@ -16,11 +25,7 @@ import {
   CHORD_TAIL_SILENCE_MS,
   degreeRootPc,
   emptyConfidence,
-  INVERSION_BONUS,
-  INVERSION_BONUS_NEW,
-  inversionBonus,
   metersFilled,
-  nextBarIndex,
   pickRapidDegree,
   PLAY_CHANGES,
   rapidChordStep,
@@ -33,6 +38,8 @@ import PointsPops, { usePointPops } from './PointsPops.jsx'
 
 const SUFFIX = { maj7: 'maj7', min7: 'm7', dom7: '7', halfDim: 'ø7' }
 const ROMAN = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°']
+// How far around a bar's downbeat a chord counts as "on the beat".
+const PROG_WINDOW_MS = 260
 const WARMUP_SECTIONS = [
   { id: 'lab', label: 'LAB' },
   { id: 'ear', label: 'EAR' },
@@ -64,6 +71,9 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const [progMeters, setProgMeters] = useState([])
   const [progLastBass, setProgLastBass] = useState([])
   const [progMsg, setProgMsg] = useState('')
+  const [progTempo, setProgTempo] = useState(84)
+  const [progCountin, setProgCountin] = useState(false)
+  const [progBeat, setProgBeat] = useState(0)
   const [revealChord, setRevealChord] = useState(null)
   const [revealed, setRevealed] = useState(0)
   const { pops, pop } = usePointPops()
@@ -88,8 +98,13 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const progBarRef = useRef(0)
   const progMetersRef = useRef([])
   const progLastBassRef = useRef([])
-  const progCleanRef = useRef(0)
   const progVoicingRef = useRef(0)
+  const progLastMidiRef = useRef(null)
+  const progNotesRef = useRef([])
+  const progPendingRef = useRef([])
+  const progTokenRef = useRef(0)
+  const transportRef = useRef(null)
+  const progMountedRef = useRef(true)
   const timerRef = useRef(null)
   const gradeRef = useRef(false)
   const disabledRef = useRef(disabled)
@@ -104,13 +119,36 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const progFilled = metersFilled(progMeters)
 
   useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-      if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
-      if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
+    () => {
+      progMountedRef.current = true
+      return () => {
+        progMountedRef.current = false
+        if (timerRef.current) clearTimeout(timerRef.current)
+        if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
+        if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
+        transportRef.current?.stop()
+        transportRef.current = null
+        for (const entry of progPendingRef.current) clearTimeout(entry.timer)
+        progPendingRef.current = []
+      }
     },
     [],
   )
+
+  // Pausing the session silences the band; the player restarts when ready.
+  useEffect(() => {
+    if (!disabled) return
+    progTokenRef.current += 1
+    progRunRef.current = false
+    for (const entry of progPendingRef.current) clearTimeout(entry.timer)
+    progPendingRef.current = []
+    transportRef.current?.stop()
+    transportRef.current = null
+    setProgRun(false)
+    setProgCountin(false)
+    setProgBeat(0)
+    setProgMsg('PAUSED.')
+  }, [disabled])
 
   function setNotes(next) {
     playedRef.current = next
@@ -359,141 +397,175 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
     }, wait)
   }
 
-  // ---- progressions: the same clock, looping bars, a meter per bar ---------
+  // ---- progressions: the band owns the clock, the player plays on the beat ----
+  // A count-in, then a looping transport plays the changes. Each bar's chord is
+  // graded in a window around its downbeat; fill every bar's meter to clear it.
+  function clearProgPending() {
+    for (const entry of progPendingRef.current) clearTimeout(entry.timer)
+    progPendingRef.current = []
+  }
+
+  function stopProgTransport() {
+    transportRef.current?.stop()
+    transportRef.current = null
+  }
+
   function resetProg(id = progChanges) {
     const bars = buildJamDegrees(id, 1).length
+    progTokenRef.current += 1
     progRunRef.current = false
     progBarRef.current = 0
     progMetersRef.current = Array(bars).fill(0)
     progLastBassRef.current = Array(bars).fill(null)
-    progCleanRef.current = 0
+    progLastMidiRef.current = null
+    progNotesRef.current = []
     progVoicingRef.current = 0
+    clearProgPending()
+    stopProgTransport()
     setProgRun(false)
+    setProgCountin(false)
     setProgBar(0)
+    setProgBeat(0)
     setProgMeters(progMetersRef.current)
     setProgLastBass(progLastBassRef.current)
     setProgMsg('')
   }
 
   function chooseProg(id) {
-    if (id === progChanges) return
+    if (id === progChanges) {
+      setProgPick(false)
+      return
+    }
     resetRun()
     setProgChanges(id)
     setProgPick(false)
     resetProg(id)
   }
 
-  function startProg() {
+  function stopProg() {
+    progTokenRef.current += 1
+    progRunRef.current = false
+    clearProgPending()
+    stopProgTransport()
+    setProgRun(false)
+    setProgCountin(false)
+    setProgBeat(0)
+    setProgMsg('STOPPED.')
+  }
+
+  async function beginProgTransport(startAt) {
+    if (!progMountedRef.current) return
+    const next = createTransport({
+      keyId,
+      bpm: progTempo,
+      degrees: progBars,
+      startAt,
+      onBeat: (beat, bar, beatInBar) => setProgBeat(beatInBar),
+      onChord: (bar, degree) => {
+        progBarRef.current = bar
+        setProgBar(bar)
+        scheduleProgGrade(bar, degree)
+      },
+      onEnd: () => {
+        if (!progRunRef.current) return
+        if (metersFilled(progMetersRef.current) >= progBars.length) {
+          progRunRef.current = false
+          setProgRun(false)
+          setProgBeat(0)
+          setProgMsg('THE FORM IS FULL. FINISH THE SET.')
+          return
+        }
+        beginProgTransport(transportRef.current?.endAt() ?? null)
+      },
+    })
+    next.setMuted(isMuted())
+    transportRef.current = next
+    await next.start()
+    if (!progMountedRef.current || !progRunRef.current) {
+      next.stop()
+      if (transportRef.current === next) transportRef.current = null
+    }
+  }
+
+  async function startProg() {
+    if (disabled) return
     unlockAudio()
     resetRun()
     resetProg()
+    const token = progTokenRef.current
+    setProgCountin(true)
+    setProgMsg('COUNT IN.')
+    const nextAt = await playCountIn(progTempo, 4)
+    if (!progMountedRef.current || token !== progTokenRef.current) return
+    setProgCountin(false)
     progRunRef.current = true
     setProgRun(true)
+    setProgMsg('PLAY EACH CHORD ON THE DOWNBEAT.')
+    beginProgTransport(nextAt)
   }
 
-  function solveProg() {
-    if (solvedRef.current) return
-    const bar = progBarRef.current
-    const degree = progBars[bar]
-    const rootPc = degreeRootPc(keyId, degree)
-    const bassPc = chordMidiRef.current.length ? Math.min(...chordMidiRef.current) % 12 : rootPc
-    const bonus = inversionBonus({ rootPc, bassPc, lastBassPc: progLastBassRef.current[bar] })
-    const outcome = scoreChord({ clean: true, combo: comboRef.current, bonus })
-    recordAttempt('warmup', false)
-    solvedRef.current = true
-    comboRef.current = outcome.combo
-    bestComboRef.current = Math.max(bestComboRef.current, outcome.combo)
-    scoreRef.current += outcome.points
-    progCleanRef.current += 1
-    if (bonus > 0) progVoicingRef.current += 1
-    progLastBassRef.current = progLastBassRef.current.map((value, index) =>
-      index === bar ? bassPc : value,
+  function scheduleProgGrade(bar, degree) {
+    if (!progRunRef.current) return
+    const at = performance.now()
+    const target = targetForDegree(keyId, degree)
+    const timer = setTimeout(() => {
+      progPendingRef.current = progPendingRef.current.filter((entry) => entry.timer !== timer)
+      gradeProgBar(bar, target, at)
+    }, PROG_WINDOW_MS + 45)
+    progPendingRef.current.push({ timer, bar, target, at })
+  }
+
+  function gradeProgBar(bar, target, at) {
+    if (!progRunRef.current) return
+    const played = progNotesRef.current.filter(
+      (note) => note.at >= at - PROG_WINDOW_MS && note.at <= at + PROG_WINDOW_MS,
     )
-    progMetersRef.current = bumpMeter(progMetersRef.current, bar, true)
-    setCombo(outcome.combo)
+    const midi = played.map((note) => note.midi).filter(Number.isFinite)
+    const timingMs = played.length
+      ? Math.min(...played.map((note) => Math.abs(note.at - at)))
+      : 0
+    const outcome = scoreChangeChord({
+      targetPcs: target.pcs,
+      triadPcs: target.triadPcs,
+      playedMidi: midi,
+      previousMidi: progLastMidiRef.current,
+      timingMs,
+      combo: comboRef.current,
+      windowMs: PROG_WINDOW_MS,
+    })
+    recordAttempt('warmup', !outcome.hit)
+    const degree = progBars[bar]
+    if (outcome.hit) {
+      comboRef.current = outcome.combo
+      bestComboRef.current = Math.max(bestComboRef.current, outcome.combo)
+      scoreRef.current += outcome.points
+      progMetersRef.current = bumpMeter(progMetersRef.current, bar, true)
+      progLastMidiRef.current = midi
+      if (outcome.smooth) progVoicingRef.current += 1
+      progLastBassRef.current = progLastBassRef.current.map((value, index) =>
+        index === bar ? Math.min(...midi) % 12 : value,
+      )
+      pop(outcome.points, outcome.smooth ? 'SMOOTH' : 'ON TIME')
+      setProgMsg(`${ROMAN[degree - 1]} ON TIME · +${outcome.points}`)
+    } else {
+      comboRef.current = 0
+      scoreRef.current = Math.max(0, scoreRef.current + outcome.points)
+      setProgMsg(midi.length ? 'NOT THE CHORD · STAY ON THE FORM.' : 'NO CHORD · STAY ON THE FORM.')
+    }
+    setCombo(comboRef.current)
     setScore(scoreRef.current)
     setProgMeters(progMetersRef.current)
     setProgLastBass(progLastBassRef.current)
-    pop(outcome.points, bonus === INVERSION_BONUS_NEW ? 'NEW BASS' : bonus ? 'INVERTED' : 'CLEAN')
-    setProgMsg(
-      `${ROMAN[degree - 1]} CLEAN · +${outcome.points} · KEEP COMPING +${CHORD_HOLD_POINTS}`,
-    )
-  }
-
-  function missProg(penalty) {
-    const bar = progBarRef.current
-    const outcome = scoreChord({ clean: false, combo: comboRef.current, penalty })
-    recordAttempt('warmup', true)
-    comboRef.current = 0
-    scoreRef.current = Math.max(0, scoreRef.current + outcome.points)
-    progMetersRef.current = bumpMeter(progMetersRef.current, bar, false)
-    solvedRef.current = false
-    setCombo(0)
-    setScore(scoreRef.current)
-    setProgMeters(progMetersRef.current)
-    if (outcome.points) pop(outcome.points, 'SLIPPED')
-    setProgMsg(penalty ? 'WRONG NOTE · NEXT BAR.' : 'BAR RAN OUT · NEXT BAR.')
-    advanceProg()
-  }
-
-  function advanceProg() {
-    stopBar()
-    chordNotesRef.current = []
-    chordMidiRef.current = []
-    solvedRef.current = false
-    setPlayed([])
-    scheduleNextChord(nextProgBar)
-  }
-
-  function nextProgBar() {
-    const next = nextBarIndex(progBarRef.current, progBars.length)
-    progBarRef.current = next
-    setProgBar(next)
-    setBarLive(false)
-  }
-
-  function expireProg() {
-    if (!progRunRef.current || disabled) return
-    if (solvedRef.current) advanceProg()
-    else missProg(false)
   }
 
   function handleProgNote(pc, note) {
-    if (disabled || !progRunRef.current || gradeRef.current) return
-    // Still waiting for the last bar's hand to stop: swallow, keep waiting.
-    if (tailRef.current.pending) {
-      scheduleNextChord(nextProgBar)
-      return
-    }
-    const target = seventhByDegree(keyId, progBars[progBarRef.current])
-    const step = rapidChordStep({ target, played: chordNotesRef.current, pc })
-    if (step.kind === 'miss') {
-      missProg(true)
-      return
-    }
-    // Any key on the current chord keeps the clock alive, solved or not.
-    restartBar()
-    if (step.kind === 'ignore') {
-      if (target.includes(pc)) awardHold()
-      return
-    }
-    chordNotesRef.current = step.played
-    if (Number.isFinite(note)) chordMidiRef.current = [...chordMidiRef.current, note]
-    setPlayed(step.played)
-    if (step.solved) solveProg()
-  }
-
-  function skipProg() {
-    stopBar()
-    if (tailTimerRef.current) clearTimeout(tailTimerRef.current)
-    tailTimerRef.current = null
-    tailRef.current = { pending: false, capAt: 0 }
-    chordNotesRef.current = []
-    chordMidiRef.current = []
-    solvedRef.current = false
-    setPlayed([])
-    setProgMsg('SKIPPED.')
-    nextProgBar()
+    if (disabled || !progRunRef.current) return
+    progNotesRef.current.push({
+      pc,
+      midi: Number.isFinite(note) ? note : 60 + pc,
+      at: performance.now(),
+    })
+    if (progNotesRef.current.length > 400) progNotesRef.current.shift()
   }
 
   function handleChordNote(pc, note) {
@@ -538,6 +610,10 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   }
 
   function finishWarmup() {
+    progTokenRef.current += 1
+    progRunRef.current = false
+    clearProgPending()
+    stopProgTransport()
     onDone({
       lab: labRef.current || {
         passed: false,
@@ -557,7 +633,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
       progression: {
         changesId: progChanges,
         name: progName,
-        clean: progCleanRef.current,
+        clean: metersFilled(progMetersRef.current),
         total: progBars.length,
         meters: progMetersRef.current,
         lastBass: progLastBassRef.current,
@@ -596,7 +672,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
               ? 'Four notes. Hear them once, then play them back in order.'
               : phase === 'rapid'
                 ? 'One chord at a time, drawn toward whichever degree you are least sure of. The bar starts on your first note and every chord tone keeps it alive. A clean chord scores and you comp it until the bar runs out.'
-                : 'Pick a progression. The chords come in order and loop. The bar is the clock, every chord tone restarts it, and a wrong note or a full bar of silence moves you on. A clean chord fills that bar’s meter. Move the bass and it pays.'}
+                : 'Pick a progression and a tempo. The band counts you in and plays the changes. You play each chord on its downbeat; a chord inside the window fills that bar’s meter. Fill every bar to clear the form.'}
         </p>
       </div>
 
@@ -843,7 +919,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                   className={`jamchip${progChanges === entry.id ? ' is-on' : ''}`}
                   aria-pressed={progChanges === entry.id}
                   onClick={() => chooseProg(entry.id)}
-                  disabled={disabled}
+                  disabled={disabled || progRun || progCountin}
                 >
                   {entry.name}
                 </button>
@@ -855,7 +931,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                   type="button"
                   className="linkbtn"
                   onClick={() => setProgPick(true)}
-                  disabled={disabled}
+                  disabled={disabled || progRun || progCountin}
                 >
                   CHANGE
                 </button>
@@ -863,20 +939,50 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
             )}
           </div>
 
-          {!progRun ? (
-            <div className="stagefoot">
-              <button
-                type="button"
-                className="btn btn--signal"
-                onClick={startProg}
-                disabled={disabled}
-              >
-                START THE PROGRESSION
-              </button>
-              <button type="button" className="btn" onClick={finishWarmup} disabled={disabled}>
-                FINISH THE SET
-              </button>
-            </div>
+          {!progRun && !progCountin ? (
+            <>
+              <label className="progtempo">
+                <span className="progtempo__label">TEMPO · {progTempo} BPM</span>
+                <input
+                  type="range"
+                  className="progtempo__range"
+                  min="60"
+                  max="120"
+                  step="2"
+                  value={progTempo}
+                  onChange={(event) => setProgTempo(Number(event.target.value))}
+                  disabled={disabled}
+                />
+              </label>
+              <div className="stagefoot">
+                <button
+                  type="button"
+                  className="btn btn--signal"
+                  onClick={startProg}
+                  disabled={disabled}
+                >
+                  {progFilled ? 'RUN IT AGAIN' : 'START THE PROGRESSION'}
+                </button>
+                <button type="button" className="btn" onClick={finishWarmup} disabled={disabled}>
+                  FINISH THE SET
+                </button>
+              </div>
+              {progMsg ? <p className="hintline">{progMsg}</p> : null}
+            </>
+          ) : progCountin ? (
+            <>
+              <div className="rapidprompt">
+                <span className="rapidprompt__play">COUNT IN · {progTempo} BPM</span>
+                <span className="rapidprompt__chord">{chordFor(progBars[0])}</span>
+                <span className="rapidprompt__sub">FIRST CHORD · GET READY</span>
+              </div>
+              <p className="hintline">FOUR CLICKS, THEN THE BAND. PLAY THE FIRST CHORD ON THE DOWNBEAT.</p>
+              <div className="stagefoot">
+                <button type="button" className="btn" onClick={stopProg} disabled={disabled}>
+                  STOP
+                </button>
+              </div>
+            </>
           ) : (
             <>
               <div className="rapidprompt">
@@ -885,10 +991,17 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                 </span>
                 <span className="rapidprompt__chord">{chordFor(progBars[progBar])}</span>
                 <span className="rapidprompt__sub">
-                  {ROMAN[progBars[progBar] - 1]} · BAR {progBar + 1} OF {progBars.length} · 7TH CHORD
+                  {ROMAN[progBars[progBar] - 1]} · BAR {progBar + 1} OF {progBars.length} · PLAY IT ON THE BEAT
                 </span>
               </div>
-              <ChordBar runKey={barKey} live={barLive} onExpire={expireProg} />
+              <div className="progbeats" aria-label="Beat">
+                {[0, 1, 2, 3].map((beat) => (
+                  <span
+                    key={beat}
+                    className={`progbeat${beat === progBeat ? ' is-on' : ''}`}
+                  />
+                ))}
+              </div>
               <div className="chordmeters" aria-label="Bars">
                 {progBars.map((degree, bar) => {
                   const meter = progMeters[bar] ?? 0
@@ -901,7 +1014,7 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                       }`}
                       key={`${bar}-${degree}`}
                     >
-                      <span className="chordmeter__numeral">{ROMAN[degree - 1]}</span>
+                      <span className="chordmeter__numeral">{chordFor(degree)}</span>
                       <span className="chordmeter__track">
                         <span
                           className="chordmeter__fill"
@@ -916,20 +1029,15 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
                 })}
               </div>
               <div className="rapidbar">
-                <span>CHORD TONES RESET THE BAR</span>
-                <span>
-                  NON-ROOT BASS +{INVERSION_BONUS} · A NEW ONE +{INVERSION_BONUS_NEW}
-                </span>
+                <span>PLAY EACH CHORD ON THE DOWNBEAT</span>
+                <span>CLOSE VOICING PAYS</span>
               </div>
               <p className="hintline">
-                {progMsg ||
-                  (barLive
-                    ? 'KEEP COMPING — THE BAR RUNS OUT TO MOVE ON.'
-                    : 'PLAY THE CHORD TO START THE BAR.')}
+                {progMsg || 'LISTEN TO THE BAND AND LAND EACH CHORD ON THE BEAT.'}
               </p>
               <div className="stagefoot">
-                <button type="button" className="btn" onClick={skipProg} disabled={disabled}>
-                  SKIP
+                <button type="button" className="btn" onClick={stopProg} disabled={disabled}>
+                  STOP
                 </button>
                 <button type="button" className="btn btn--signal" onClick={finishWarmup} disabled={disabled}>
                   FINISH THE SET
