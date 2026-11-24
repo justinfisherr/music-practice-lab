@@ -4,7 +4,7 @@ import SetWarmup from './SetWarmup.jsx'
 
 // THE SET is one stage: the Scale Lab warm-up runs lab → ear → chords →
 // progressions and finishes the run itself.
-export default function SetRun({ practice, onFinished, disabled }) {
+export default function SetRun({ practice, onFinished, disabled, onChord }) {
   const { session, recordAttempt, recordDetail, advanceStage, finish } = practice
   const completingRef = useRef(false)
   const stages = session.composition?.stages || []
@@ -45,6 +45,7 @@ export default function SetRun({ practice, onFinished, disabled }) {
             recordAttempt={recordAttempt}
             disabled={disabled}
             onDone={finishSet}
+            onChord={onChord}
           />
         ) : (
           <div className="emptyblock">SET DATA MISSING. LEAVE AND START AGAIN.</div>

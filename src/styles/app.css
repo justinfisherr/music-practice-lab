@@ -1543,6 +1543,17 @@ select {
   font-weight: 700;
   letter-spacing: 1.5px;
 }
+/* The chord under the player's hands, always visible in the top bar. */
+.sessionbar__chord {
+  padding: 4px 10px;
+  background: var(--bg);
+  color: var(--ink);
+  border: 2px solid var(--bg);
+  font-size: clamp(18px, 4vw, 22px);
+  font-weight: 800;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
 .sessionbar__timer {
   font-size: clamp(20px, 5vw, 26px);
   font-weight: 700;
@@ -5503,6 +5514,14 @@ button.artistcard__hint:focus-visible {
   }
   .app--run .sessionbar__keyphone {
     display: inline;
+  }
+  /* The chord is the one thing worth the phone's bar: it takes the stage chip's room. */
+  .app--run .sessionbar:has(.sessionbar__chord) .sessionbar__key {
+    display: none;
+  }
+  .app--run .sessionbar__chord {
+    padding: 2px 6px;
+    font-size: 16px;
   }
   .app--run .sessionbar__timer {
     width: auto;

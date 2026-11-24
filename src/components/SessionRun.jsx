@@ -41,6 +41,8 @@ export default function SessionRun({ practice, onFinished, onExit }) {
   const [now, setNow] = useState(() => Date.now())
   const [sound, setSound] = useState(() => !isMuted())
   const [audioNote, setAudioNote] = useState('')
+  // Whatever chord the drill under the player's hands is asking for right now.
+  const [chord, setChord] = useState('')
   const audioNoteTimer = useRef(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [hidden, setHidden] = useState(
@@ -141,6 +143,7 @@ export default function SessionRun({ practice, onFinished, onExit }) {
             {stageLabel} · {session.currentStage + 1} OF {session.stages.length}
           </span>
         </span>
+        {chord ? <span className="sessionbar__chord">{chord}</span> : null}
         <span className="sessionbar__timer" aria-label={`Elapsed ${clock(elapsed)}`}>
           {clock(elapsed)}
         </span>
@@ -223,6 +226,7 @@ export default function SessionRun({ practice, onFinished, onExit }) {
           onFinished={onFinished}
           disabled={pausedForInput}
           touch={touch}
+          onChord={setChord}
         />
       ) : session.composition.version === 3 ? (
         <div className="run">

@@ -47,7 +47,7 @@ const WARMUP_SECTIONS = [
   { id: 'progression', label: 'PROGRESSIONS' },
 ]
 
-export default function SetWarmup({ session, onDone, disabled, recordAttempt }) {
+export default function SetWarmup({ session, onDone, disabled, recordAttempt, onChord }) {
   const keyId = session.keyId
   const warmup = session.composition.stages[0].detail
   const [phase, setPhase] = useState('lab')
@@ -117,6 +117,18 @@ export default function SetWarmup({ session, onDone, disabled, recordAttempt }) 
   const progBars = buildJamDegrees(progChanges, 1)
   const progName = PLAY_CHANGES.find((entry) => entry.id === progChanges)?.name || 'turnaround'
   const progFilled = metersFilled(progMeters)
+
+  // The session bar mirrors the chord the drill is asking for right now.
+  const shownChord =
+    phase === 'rapid' && chordRun
+      ? chordFor(rapidDegree)
+      : phase === 'progression' && (progRun || progCountin)
+        ? chordFor(progBars[progBar])
+        : ''
+
+  useEffect(() => {
+    onChord?.(shownChord)
+  }, [shownChord, onChord])
 
   useEffect(
     () => {
